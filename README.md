@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-![Local Agent Studio](docs/assets/github-hero-dark.png)
+![Local Agent Studio](assets/github-hero-dark.png)
 
 # Local Agent Studio
 
@@ -35,9 +35,9 @@ Local Agent Studio is built for people who want a normal chatbot interface, but 
 
 ## Screenshots
 
-![Light social preview](docs/assets/github-social-light.png)
+![Light social preview](assets/github-social-light.png)
 
-![Rendered app screen](docs/rendered-screen.png)
+![Rendered app screen](assets/rendered-screen.png)
 
 ## What It Can Do
 
@@ -316,9 +316,9 @@ Explicit image command examples:
 │  ├─ App.tsx
 │  ├─ i18n.ts
 │  └─ styles.css
-├─ docs/
-│  ├─ assets/
-│  ├─ PROMO_PLAN.md
+├─ assets/
+│  ├─ github-hero-dark.png
+│  ├─ github-social-light.png
 │  └─ rendered-screen.png
 ├─ docker-compose.searxng.yml
 └─ package.json
@@ -349,7 +349,7 @@ Remove-Item Env:\LOCAL_AGENT_CAPTURE_INTERACT
 The screenshot is saved to:
 
 ```text
-docs/rendered-screen.png
+assets/rendered-screen.png
 ```
 
 ## Roadmap
