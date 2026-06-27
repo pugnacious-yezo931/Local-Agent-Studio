@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ![Local Agent Studio](docs/assets/github-hero-dark.png)
 
 # Local Agent Studio
@@ -386,4 +387,7 @@ Issues and pull requests are welcome. Useful contributions:
 
 ## License
 
-No license file is included yet. Add a license before publishing the repository publicly.
+Apache License 2.0. See [LICENSE](LICENSE).
+=======
+# Local-Agent-Studio
+>>>>>>> origin/main
