@@ -83,6 +83,28 @@
   box-sizing: border-box;
 }
 
+@keyframes las-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes las-scale-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 html,
 body,
 #root {
@@ -105,6 +127,16 @@ textarea {
 
 button {
   cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 180ms ease,
+    transform 160ms ease;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
 }
 
 button:disabled {
@@ -140,6 +172,90 @@ h3 {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   height: 100%;
+}
+
+.setup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.setup-panel {
+  display: grid;
+  width: min(520px, 100%);
+  gap: 18px;
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  animation: las-scale-in 220ms ease both;
+}
+
+.setup-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  color: white;
+  background: var(--accent);
+  border-radius: 8px;
+}
+
+.setup-panel p,
+.setup-workspace span {
+  color: var(--muted);
+}
+
+.setup-workspace {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.setup-workspace strong {
+  overflow-wrap: anywhere;
+}
+
+.setup-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.setup-option input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.setup-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.setup-option small,
+.settings-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .sidebar {
@@ -210,6 +326,14 @@ h3 {
   border: 0;
   border-radius: 8px;
   text-align: left;
+  transition:
+    background-color 170ms ease,
+    color 170ms ease,
+    transform 170ms ease;
+}
+
+.nav-item:hover {
+  transform: translateX(2px);
 }
 
 .nav-item:hover,
@@ -226,13 +350,20 @@ h3 {
   font-weight: 740;
 }
 
+.profile-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+
 .profile-row {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   height: 46px;
-  margin-top: auto;
   padding: 0 10px;
   color: var(--text);
   background: transparent;
@@ -357,6 +488,7 @@ h3 {
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 13px;
   align-items: start;
+  animation: las-fade-up 220ms ease both;
 }
 
 .message.user {
@@ -376,6 +508,7 @@ h3 {
   padding: 12px 15px;
   background: var(--bubble);
   border-radius: 8px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.045);
 }
 
 .message.pending {
@@ -438,6 +571,30 @@ h3 {
 .message-actions button:hover {
   color: var(--text);
   background: var(--surface-alt);
+}
+
+.edit-message-box {
+  display: grid;
+  gap: 8px;
+  min-width: min(520px, 68vw);
+}
+
+.edit-message-box textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.edit-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.edited-label {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .markdown-message {
@@ -549,6 +706,7 @@ h3 {
   background: color-mix(in srgb, var(--surface-alt) 75%, transparent);
   border: 1px solid var(--line);
   border-radius: 8px;
+  animation: las-fade-up 180ms ease both;
 }
 
 .reasoning-panel summary,
@@ -729,6 +887,22 @@ h3 {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   box-shadow: 0 10px 34px rgb(0 0 0 / 0.08);
+  transition:
+    border-color 180ms ease,
+    box-shadow 220ms ease,
+    transform 180ms ease;
+}
+
+.chat-view:has(.composer-card:hover) .composer-card {
+  border-color: var(--line-strong);
+}
+
+.composer-card:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  box-shadow:
+    0 18px 44px rgb(0 0 0 / 0.1),
+    0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  transform: translateY(-1px);
 }
 
 .composer textarea {
@@ -799,6 +973,98 @@ textarea:focus {
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.las-select {
+  position: relative;
+  z-index: 8;
+}
+
+.las-select.open {
+  z-index: 20;
+}
+
+.las-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 112px;
+  max-width: 240px;
+  height: 34px;
+  padding: 0 9px;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, white), var(--surface-alt));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.45) inset;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.las-select-trigger:hover,
+.las-select.open .las-select-trigger {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.08),
+    0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.las-select-trigger span:not(.las-select-icon) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.las-select-icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  color: var(--accent-strong);
+}
+
+.las-select-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  display: grid;
+  min-width: max(100%, 178px);
+  max-width: 280px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 88%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.18);
+  backdrop-filter: blur(18px);
+  animation: las-scale-in 140ms ease both;
+}
+
+.las-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 9px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 680;
+  text-align: left;
+}
+
+.las-select-option:hover {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.las-select-option.active {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent-soft) 78%, var(--surface));
+  font-weight: 800;
 }
 
 .select-shell.compact {
@@ -1033,6 +1299,18 @@ textarea:focus {
   font-size: 12px;
 }
 
+.file-preview-panel {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: var(--muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .history-list {
   display: grid;
   align-content: start;
@@ -1149,6 +1427,25 @@ label {
   font-weight: 700;
 }
 
+.settings-sections .checkbox-label {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  gap: 8px;
+  color: var(--text);
+}
+
+.settings-sections .checkbox-label input {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-error {
+  margin-right: auto;
+  color: var(--red);
+  font-size: 12px;
+}
+
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1200,6 +1497,10 @@ label {
     padding: 0;
   }
 
+  .profile-block {
+    grid-template-columns: 1fr;
+  }
+
   .chat-header,
   .message-list,
   .composer {
@@ -1209,5 +1510,16 @@ label {
 
   .workspace-grid {
     grid-template-columns: 280px minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }

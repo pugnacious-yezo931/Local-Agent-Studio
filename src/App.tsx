@@ -3,6 +3,7 @@ import { ChatWorkspace } from "./components/ChatWorkspace";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { ActiveView, Sidebar } from "./components/Sidebar";
+import { SetupWizard } from "./components/SetupWizard";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { WorkspacePanel } from "./components/WorkspacePanel";
 import type {
@@ -14,6 +15,11 @@ import type {
   ToolMode,
   ToolResult,
 } from "./types";
+
+interface QueuedTask {
+  text: string;
+  attachments: Attachment[];
+}
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -61,6 +67,7 @@ export function App() {
   const [toolMode, setToolMode] = useState<ToolMode>("auto");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("chat");
+  const [queuedTasks, setQueuedTasks] = useState<QueuedTask[]>([]);
 
   useEffect(() => {
     window.localAgent.getSettings().then(setSettings).catch(() => undefined);
@@ -141,12 +148,119 @@ export function App() {
     [saveSettingsPatch],
   );
 
+  const handleThinkingChange = useCallback(
+    (thinking: Settings["ollama"]["thinking"]) => {
+      saveSettingsPatch((current) => ({
+        ...current,
+        ollama: {
+          ...current.ollama,
+          thinking,
+        },
+      }));
+    },
+    [saveSettingsPatch],
+  );
+
   const handleChooseWorkspace = useCallback(async () => {
     const selected = await window.localAgent.chooseWorkspace();
     if (selected) {
       setSettings(selected);
     }
   }, []);
+
+  const handleContextDateToggle = useCallback(
+    (enabled: boolean) => {
+      saveSettingsPatch((current) => ({
+        ...current,
+        context: {
+          ...current.context,
+          includeLocalDateTime: enabled,
+        },
+      }));
+    },
+    [saveSettingsPatch],
+  );
+
+  const handleCheckUpdates = useCallback(async () => {
+    const result = await window.localAgent.checkUpdates();
+    const content = result.error
+      ? `Update check failed: ${result.error}`
+      : result.updateAvailable
+        ? `Update available: **${result.latestVersion}**\n\n${result.url || ""}`
+        : `You're up to date. Current version: **${result.currentVersion}**.`;
+    setMessages((current) => [
+      ...current,
+      {
+        id: makeId("update"),
+        role: "assistant",
+        createdAt: timestamp(),
+        content,
+        toolResults: [
+          {
+            type: "update",
+            label: "Update check",
+            status: result.error ? "error" : "done",
+            payload: result,
+          },
+        ],
+      },
+    ]);
+    setActiveView("chat");
+  }, []);
+
+  const handleFinishSetup = useCallback(async () => {
+    if (!settings) {
+      return;
+    }
+    const saved = await window.localAgent.saveSettings({
+      ...settings,
+      setup: {
+        ...settings.setup,
+        firstLaunchComplete: true,
+      },
+    });
+    setSettings(saved);
+  }, [settings]);
+
+  const handleExportChat = useCallback(async () => {
+    await window.localAgent.exportChat({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      messages,
+    });
+  }, [messages]);
+
+  const handleImportChat = useCallback(async () => {
+    const imported = await window.localAgent.importChat();
+    const data = imported?.data as { messages?: ChatMessage[] } | ChatMessage[] | null | undefined;
+    const importedMessages = Array.isArray(data) ? data : data?.messages;
+    if (importedMessages?.length) {
+      setMessages(importedMessages);
+      setActiveView("chat");
+    }
+  }, []);
+
+  const handleEditUserMessage = useCallback((messageId: string, content: string) => {
+    if (busy) {
+      return;
+    }
+    setQueuedTasks([]);
+    setMessages((current) => {
+      const index = current.findIndex((message) => message.id === messageId && message.role === "user");
+      if (index < 0) {
+        return current;
+      }
+      return [
+        ...current.slice(0, index),
+        {
+          ...current[index],
+          content,
+          editedAt: timestamp(),
+        },
+      ];
+    });
+    setActiveView("chat");
+  }, [busy]);
 
   const handleStreamEvent = useCallback(
     (assistantId: string, event: AgentStreamEvent) => {
@@ -203,7 +317,14 @@ export function App() {
 
   const sendMessage = useCallback(
     async (text: string, attachments: Attachment[] = []) => {
-      if (!settings || busy) {
+      if (!settings) {
+        return;
+      }
+
+      if (busy) {
+        if (settings.agent.taskQueue) {
+          setQueuedTasks((current) => [...current, { text, attachments }]);
+        }
         return;
       }
 
@@ -264,6 +385,15 @@ export function App() {
     [busy, finishAssistant, handleStreamEvent, messages, runSlashCommand, settings, toolMode],
   );
 
+  useEffect(() => {
+    if (busy || !queuedTasks.length || !settings) {
+      return;
+    }
+    const [next] = queuedTasks;
+    setQueuedTasks((current) => current.slice(1));
+    void sendMessage(next.text, next.attachments);
+  }, [busy, queuedTasks, sendMessage, settings]);
+
   const runTerminal = useCallback(async (command: string) => window.localAgent.runCommand({ command }), []);
 
   const newChat = useCallback(() => {
@@ -276,7 +406,22 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar activeView={activeView} settings={settings} onNavigate={setActiveView} onNewChat={newChat} onOpenSettings={() => setSettingsOpen(true)} />
+      {settings && !settings.setup?.firstLaunchComplete ? (
+        <SetupWizard
+          settings={settings}
+          onChooseWorkspace={handleChooseWorkspace}
+          onContextDateToggle={handleContextDateToggle}
+          onFinish={handleFinishSetup}
+        />
+      ) : null}
+      <Sidebar
+        activeView={activeView}
+        settings={settings}
+        onNavigate={setActiveView}
+        onNewChat={newChat}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onCheckUpdates={handleCheckUpdates}
+      />
 
       <main className="main-area">
         {activeView === "chat" ? (
@@ -288,14 +433,25 @@ export function App() {
             onToolModeChange={setToolMode}
             onImageSettingsChange={handleImageSettingsChange}
             onOllamaModelChange={handleOllamaModelChange}
+            onThinkingChange={handleThinkingChange}
+            onEditUserMessage={handleEditUserMessage}
             onSend={sendMessage}
             onChooseWorkspace={handleChooseWorkspace}
             onOpenSettings={() => setSettingsOpen(true)}
+            queueEnabled={Boolean(settings?.agent.taskQueue)}
+            queueLength={queuedTasks.length}
           />
         ) : null}
 
         {activeView === "history" ? (
-          <HistoryPanel messages={messages} settings={settings} onNewChat={newChat} onBackToChat={() => setActiveView("chat")} />
+          <HistoryPanel
+            messages={messages}
+            settings={settings}
+            onNewChat={newChat}
+            onBackToChat={() => setActiveView("chat")}
+            onExportChat={handleExportChat}
+            onImportChat={handleImportChat}
+          />
         ) : null}
 
         {activeView === "workspace" ? <WorkspacePanel settings={settings} onChooseWorkspace={handleChooseWorkspace} /> : null}

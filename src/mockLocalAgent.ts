@@ -11,8 +11,14 @@ import type {
 } from "./types";
 
 const mockSettings: Settings = {
-  version: 1,
+  version: 2,
   workspacePath: "C:\\LocalAgentStudio\\workspace",
+  setup: {
+    firstLaunchComplete: true,
+  },
+  context: {
+    includeLocalDateTime: true,
+  },
   appearance: {
     theme: "system",
     language: "en",
@@ -20,12 +26,22 @@ const mockSettings: Settings = {
   agent: {
     maxWebSearches: 3,
     maxImageJobs: 3,
+    maxToolSteps: 5,
+    taskQueue: true,
+  },
+  permissions: {
+    files: "allow",
+    search: "allow",
+    images: "allow",
+    terminal: "ask",
+    database: "allow",
+    mcp: "ask",
   },
   ollama: {
     baseUrl: "http://localhost:11434",
     model: "auto",
     apiKey: "",
-    thinking: "auto",
+    thinking: "off",
     temperature: 0.35,
     contextTokens: 8192,
     timeoutMs: 120000,
@@ -46,6 +62,26 @@ const mockSettings: Settings = {
   searxng: {
     baseUrl: "http://localhost:8080",
   },
+  runpod: {
+    enabled: false,
+    apiKey: "",
+    endpointId: "",
+    baseUrl: "",
+    ollamaBaseUrl: "",
+    comfyBaseUrl: "",
+  },
+  mcp: {
+    enabled: false,
+    timeoutMs: 15000,
+    servers: [],
+  },
+  updates: {
+    enabled: true,
+    checkOnStartup: false,
+    repo: "CrazyDashTool/Local-Agent-Studio",
+    currentVersion: "0.2.0",
+    versionUrl: "https://raw.githubusercontent.com/CrazyDashTool/Local-Agent-Studio/main/version.json",
+  },
   comfy: {
     baseUrl: "http://localhost:8188",
     workflowPath: "",
@@ -62,6 +98,7 @@ const mockSettings: Settings = {
     zImageWorkflowPath: "electron\\workflows\\image_z_image_turbo.json",
     fluxWorkflowPath: "electron\\workflows\\image_flux2_text_to_image_9b.json",
     ideogramWorkflowPath: "electron\\workflows\\ideogram_v4.json",
+    customModels: [],
   },
   sandbox: {
     mode: "subprocess",
@@ -146,6 +183,12 @@ export function installMockLocalAgent() {
     getSettings: async () => mockSettings,
     saveSettings: async (settings: Settings) => settings,
     checkProviders: async () => mockProviders,
+    checkUpdates: async () => ({
+      enabled: true,
+      currentVersion: "0.2.0",
+      latestVersion: "0.2.0",
+      updateAvailable: false,
+    }),
     sendMessage: async (): Promise<AgentResponse> => previewResponse(),
     sendMessageStream: async (_payload, onEvent: (event: AgentStreamEvent) => void): Promise<AgentResponse> => {
       const response = previewResponse();
@@ -185,6 +228,8 @@ export function installMockLocalAgent() {
       size: 0,
       source: payload.image,
     }),
+    listMcpTools: async () => ({ tools: [] }),
+    callMcpTool: async () => ({}),
     runCommand: async (): Promise<TerminalResult> => ({
       exitCode: 0,
       stdout: "Preview command output",
@@ -205,8 +250,15 @@ export function installMockLocalAgent() {
       relativePath: payload.filePath,
       absolutePath: `${mockSettings.workspacePath}\\${payload.filePath}`,
     }),
+    exportFile: async (payload) => ({
+      sourcePath: `${mockSettings.workspacePath}\\${payload.filePath}`,
+      savedPath: `${mockSettings.workspacePath}\\exports\\${payload.filePath}`,
+    }),
+    exportChat: async () => ({ savedPath: `${mockSettings.workspacePath}\\chat.json` }),
+    importChat: async () => null,
     chooseWorkspace: async () => mockSettings,
     chooseAttachments: async () => [],
+    importAttachments: async () => [],
     openPath: async () => undefined,
     showPath: async () => undefined,
   };

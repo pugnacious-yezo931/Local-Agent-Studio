@@ -1,4 +1,4 @@
-import { Bot, Box, Image, RefreshCw, Search, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
+import { Bot, Box, Cloud, Image, Plug, RefreshCw, Search, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 import type { ProviderHealth, Settings } from "../types";
 
 interface ProviderInspectorProps {
@@ -18,6 +18,12 @@ function iconFor(id: string) {
   if (id === "docker") {
     return <Box size={18} />;
   }
+  if (id === "runpod") {
+    return <Cloud size={18} />;
+  }
+  if (id === "mcp") {
+    return <Plug size={18} />;
+  }
   return <Search size={18} />;
 }
 
@@ -30,6 +36,10 @@ function selectedWorkflow(settings: Settings | null) {
   }
   if (settings.image.model === "ideogram-v4") {
     return settings.image.ideogramWorkflowPath;
+  }
+  const custom = settings.image.customModels?.find((model) => model.id === settings.image.model);
+  if (custom) {
+    return custom.workflowPath;
   }
   return settings.image.zImageWorkflowPath;
 }

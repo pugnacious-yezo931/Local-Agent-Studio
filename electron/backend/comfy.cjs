@@ -43,11 +43,51 @@ function clamp(value, min, max) {
 
 function resolveImageModel(settings, override) {
   const model = override || settings.image?.model || "z-image-turbo";
-  return IMAGE_PRESETS[model] ? model : "z-image-turbo";
+  if (IMAGE_PRESETS[model] || customImageModel(settings, model)) {
+    return model;
+  }
+  return "z-image-turbo";
+}
+
+function comfyBaseUrl(settings) {
+  if (settings.runpod?.enabled && settings.runpod.comfyBaseUrl) {
+    return settings.runpod.comfyBaseUrl;
+  }
+  return settings.comfy.baseUrl;
+}
+
+function customImageModel(settings, model) {
+  return (settings.image?.customModels || []).find((item) => item.id === model);
+}
+
+function presetFor(settings, model) {
+  const builtIn = IMAGE_PRESETS[model];
+  if (builtIn) {
+    return builtIn;
+  }
+
+  const custom = customImageModel(settings, model);
+  if (custom) {
+    return {
+      label: custom.label || custom.id,
+      steps: clamp(custom.steps || 20, 1, 150),
+      cfg: Number.isFinite(Number(custom.cfg)) ? Number(custom.cfg) : 5,
+      sampler: custom.sampler || "euler",
+      scheduler: custom.scheduler || "normal",
+      workflowPath: custom.workflowPath || "",
+      checkpoint: custom.checkpoint || settings.comfy.defaultCheckpoint,
+      custom: true,
+    };
+  }
+
+  return IMAGE_PRESETS["z-image-turbo"];
 }
 
 function checkpointFor(settings, model) {
-  const preset = IMAGE_PRESETS[model];
+  const preset = presetFor(settings, model);
+  if (preset.custom) {
+    return preset.checkpoint;
+  }
   if (preset.checkpointKey && settings.image?.[preset.checkpointKey]) {
     return settings.image[preset.checkpointKey];
   }
@@ -55,7 +95,10 @@ function checkpointFor(settings, model) {
 }
 
 function workflowPathFor(settings, model) {
-  const preset = IMAGE_PRESETS[model];
+  const preset = presetFor(settings, model);
+  if (preset.custom) {
+    return preset.workflowPath;
+  }
   const modelPath = preset.workflowKey ? settings.image?.[preset.workflowKey] : "";
   return modelPath || settings.comfy.workflowPath || "";
 }
@@ -284,7 +327,7 @@ function loadWorkflow(settings, prompt, negativePrompt, generation) {
 }
 
 async function queueComfyJob({ prompt, negativePrompt, settings, model, ideogramEffort }) {
-  const preset = IMAGE_PRESETS[model];
+  const preset = presetFor(settings, model);
   const seed = Math.floor(Math.random() * 1_000_000_000_000_000);
   const generation = {
     model,
@@ -298,7 +341,7 @@ async function queueComfyJob({ prompt, negativePrompt, settings, model, ideogram
   };
   const clientId = randomUUID();
   const workflow = loadWorkflow(settings, prompt, negativePrompt, generation);
-  const data = await fetchJson(endpoint(settings.comfy.baseUrl, "/prompt"), {
+  const data = await fetchJson(endpoint(comfyBaseUrl(settings), "/prompt"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -354,7 +397,7 @@ async function queueComfyPrompt({ prompt, negativePrompt, settings, imageModel, 
 
 async function getComfyHistory({ promptId, settings }) {
   const pathSuffix = promptId ? `/history/${encodeURIComponent(promptId)}` : "/history";
-  return fetchJson(endpoint(settings.comfy.baseUrl, pathSuffix), { timeoutMs: 10000 });
+  return fetchJson(endpoint(comfyBaseUrl(settings), pathSuffix), { timeoutMs: 10000 });
 }
 
 function imageViewUrl(settings, image) {
@@ -363,7 +406,7 @@ function imageViewUrl(settings, image) {
     subfolder: image.subfolder || "",
     type: image.type || "output",
   });
-  return endpoint(settings.comfy.baseUrl, `/view?${params.toString()}`);
+  return endpoint(comfyBaseUrl(settings), `/view?${params.toString()}`);
 }
 
 function collectImagesFromHistory(history, settings) {

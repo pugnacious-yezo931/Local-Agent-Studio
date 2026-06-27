@@ -7,11 +7,13 @@ import type {
   ComfyQueueResponse,
   IdeogramEffort,
   ImageModel,
+  McpToolInfo,
   ProviderHealth,
   SearchProvider,
   SearchResult,
   Settings,
   TerminalResult,
+  UpdateCheckResult,
   WorkspaceListResult,
   WorkspaceReadResult,
   WorkspaceWriteResult,
@@ -29,6 +31,7 @@ declare global {
       getSettings: () => Promise<Settings>;
       saveSettings: (settings: Settings) => Promise<Settings>;
       checkProviders: () => Promise<ProviderHealth[]>;
+      checkUpdates: () => Promise<UpdateCheckResult>;
       sendMessage: (payload: {
         messages: CompactChatMessage[];
         toolMode: "auto" | "web" | "none";
@@ -54,14 +57,27 @@ declare global {
       getComfyHistory: (payload: { promptId?: string }) => Promise<unknown>;
       getComfyImages: (payload: { promptId: string }) => Promise<{ promptId: string; images: ComfyImage[] }>;
       saveComfyImage: (payload: { image: ComfyImage }) => Promise<ComfyImageSaveResult>;
+      listMcpTools: () => Promise<{ tools: McpToolInfo[] }>;
+      callMcpTool: (payload: { serverName: string; toolName: string; args?: Record<string, unknown> }) => Promise<unknown>;
       runCommand: (payload: { command: string }) => Promise<TerminalResult>;
       listFiles: (payload?: { directory?: string; depth?: number }) => Promise<WorkspaceListResult>;
       readFile: (payload: { filePath: string }) => Promise<WorkspaceReadResult>;
       writeFile: (payload: { filePath: string; content: string; overwrite?: boolean }) => Promise<WorkspaceWriteResult>;
       appendFile: (payload: { filePath: string; content: string }) => Promise<WorkspaceWriteResult>;
       deleteFile: (payload: { filePath: string }) => Promise<{ root: string; relativePath: string; absolutePath: string }>;
+      exportFile: (payload: { filePath: string }) => Promise<{ sourcePath: string; savedPath: string } | null>;
+      exportChat: (payload: { version: number; exportedAt: string; messages: unknown[] }) => Promise<{ savedPath: string } | null>;
+      importChat: () => Promise<{ sourcePath: string; data: unknown } | null>;
       chooseWorkspace: () => Promise<Settings | null>;
       chooseAttachments: () => Promise<Attachment[]>;
+      importAttachments: (payload: {
+        items: Array<{
+          path?: string;
+          name?: string;
+          mimeType?: string;
+          dataBase64?: string;
+        }>;
+      }) => Promise<Attachment[]>;
       openPath: (targetPath: string) => Promise<void>;
       showPath: (targetPath: string) => Promise<void>;
     };

@@ -4,9 +4,11 @@ export type ToolMode = "auto" | "web" | "none";
 export type SearchProvider = "auto" | "searxng" | "serpapi" | "ollama";
 export type ThemeMode = "system" | "light" | "dark";
 export type LanguageCode = "en" | "ru" | "uk" | "de" | "pl";
-export type ThinkingMode = "auto" | "off" | "on" | "low" | "medium" | "high" | "max";
-export type ImageModel = "z-image-turbo" | "flux2-klein-9b" | "ideogram-v4";
+export type ThinkingMode = "off" | "low" | "medium" | "high";
+export type BuiltInImageModel = "z-image-turbo" | "flux2-klein-9b" | "ideogram-v4";
+export type ImageModel = BuiltInImageModel | string;
 export type IdeogramEffort = "turbo" | "default" | "quality";
+export type ToolPermission = "allow" | "ask" | "deny";
 
 export interface SearchResult {
   title: string;
@@ -51,7 +53,7 @@ export interface WorkspaceReadResult {
 export interface WorkspaceWriteResult extends WorkspaceReadResult {}
 
 export interface ToolResult {
-  type: "search" | "comfy" | "terminal" | "file" | "database";
+  type: "search" | "comfy" | "terminal" | "file" | "database" | "mcp" | "update";
   label: string;
   status?: "running" | "done" | "error";
   query?: string;
@@ -68,6 +70,7 @@ export interface ChatMessage {
   attachments?: Attachment[];
   thinking?: string;
   pending?: boolean;
+  editedAt?: string;
 }
 
 export interface AppLog {
@@ -92,6 +95,12 @@ export interface ProviderHealth {
 export interface Settings {
   version: number;
   workspacePath: string;
+  setup: {
+    firstLaunchComplete: boolean;
+  };
+  context: {
+    includeLocalDateTime: boolean;
+  };
   appearance: {
     theme: ThemeMode;
     language: LanguageCode;
@@ -99,6 +108,16 @@ export interface Settings {
   agent: {
     maxWebSearches: number;
     maxImageJobs: number;
+    maxToolSteps: number;
+    taskQueue: boolean;
+  };
+  permissions: {
+    files: ToolPermission;
+    search: ToolPermission;
+    images: ToolPermission;
+    terminal: ToolPermission;
+    database: ToolPermission;
+    mcp: ToolPermission;
   };
   ollama: {
     baseUrl: string;
@@ -125,6 +144,26 @@ export interface Settings {
   searxng: {
     baseUrl: string;
   };
+  runpod: {
+    enabled: boolean;
+    apiKey: string;
+    endpointId: string;
+    baseUrl: string;
+    ollamaBaseUrl: string;
+    comfyBaseUrl: string;
+  };
+  mcp: {
+    enabled: boolean;
+    timeoutMs: number;
+    servers: McpServerConfig[];
+  };
+  updates: {
+    enabled: boolean;
+    checkOnStartup: boolean;
+    repo: string;
+    currentVersion: string;
+    versionUrl: string;
+  };
   comfy: {
     baseUrl: string;
     workflowPath: string;
@@ -141,13 +180,50 @@ export interface Settings {
     zImageWorkflowPath: string;
     fluxWorkflowPath: string;
     ideogramWorkflowPath: string;
+    customModels: CustomImageModel[];
   };
   sandbox: {
     mode: "subprocess" | "docker";
-    shell: "powershell" | "cmd";
+    shell: "powershell" | "cmd" | "bash" | "zsh" | "sh";
     dockerImage: string;
     timeoutMs: number;
   };
+}
+
+export interface CustomImageModel {
+  id: string;
+  label: string;
+  workflowPath: string;
+  checkpoint: string;
+  steps: number;
+  cfg: number;
+  sampler: string;
+  scheduler: string;
+}
+
+export interface McpServerConfig {
+  name: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface McpToolInfo {
+  serverName: string;
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
+}
+
+export interface UpdateCheckResult {
+  enabled: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  url?: string;
+  notes?: string;
+  error?: string;
 }
 
 export interface AgentResponse {

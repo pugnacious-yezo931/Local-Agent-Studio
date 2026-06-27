@@ -1,10 +1,13 @@
 const path = require("node:path");
+const fs = require("node:fs");
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { readSettings, saveSettings } = require("./backend/config.cjs");
 const { checkProviders } = require("./backend/providers.cjs");
 const { sendAgentMessage, sendAgentMessageStream } = require("./backend/llm.cjs");
 const { searchWeb } = require("./backend/search.cjs");
 const { queueComfyPrompt, getComfyHistory, getComfyImages, saveComfyImageToWorkspace } = require("./backend/comfy.cjs");
+const { listMcpTools, callMcpTool } = require("./backend/mcp.cjs");
+const { checkForUpdates } = require("./backend/updates.cjs");
 const { runCommand } = require("./backend/sandbox.cjs");
 const { describeAttachments } = require("./backend/attachments.cjs");
 const {
@@ -12,6 +15,7 @@ const {
   deleteWorkspacePath,
   listFiles,
   readTextFile,
+  resolveWorkspacePath,
   writeTextFile,
 } = require("./backend/files.cjs");
 
@@ -57,6 +61,8 @@ function registerHandlers() {
   ipcMain.handle("settings:save", (_event, settings) => saveSettings(userDataDir(), settings));
 
   ipcMain.handle("providers:check", async () => checkProviders(getSettings()));
+
+  ipcMain.handle("updates:check", async () => checkForUpdates(getSettings()));
 
   ipcMain.handle("agent:message", async (_event, payload) =>
     sendAgentMessage({
@@ -120,6 +126,21 @@ function registerHandlers() {
     }),
   );
 
+  ipcMain.handle("mcp:list-tools", async () =>
+    listMcpTools({
+      settings: getSettings(),
+    }),
+  );
+
+  ipcMain.handle("mcp:call-tool", async (_event, payload) =>
+    callMcpTool({
+      settings: getSettings(),
+      serverName: payload.serverName,
+      toolName: payload.toolName,
+      args: payload.args || {},
+    }),
+  );
+
   ipcMain.handle("terminal:run", async (_event, payload) =>
     runCommand({
       command: payload.command,
@@ -166,6 +187,23 @@ function registerHandlers() {
     }),
   );
 
+  ipcMain.handle("files:export", async (_event, payload) => {
+    const settings = getSettings();
+    const file = resolveWorkspacePath(settings, payload.filePath);
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: "Save workspace file",
+      defaultPath: path.basename(file.relativePath),
+    });
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+    fs.copyFileSync(file.absolutePath, result.filePath);
+    return {
+      sourcePath: file.absolutePath,
+      savedPath: result.filePath,
+    };
+  });
+
   ipcMain.handle("dialog:attachments", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ["openFile", "multiSelections"],
@@ -183,6 +221,29 @@ function registerHandlers() {
     return describeAttachments(result.filePaths);
   });
 
+  ipcMain.handle("attachments:import", async (_event, payload) => {
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    const importedPaths = [];
+    const tempDir = path.join(app.getPath("temp"), "LocalAgentStudio", "attachments");
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    for (const item of items) {
+      if (item.path && fs.existsSync(item.path)) {
+        importedPaths.push(item.path);
+        continue;
+      }
+      if (!item.dataBase64) {
+        continue;
+      }
+      const safeName = path.basename(item.name || `clipboard-${Date.now()}.png`).replace(/[<>:"/\\|?*]+/g, "-");
+      const targetPath = path.join(tempDir, `${Date.now()}-${safeName}`);
+      fs.writeFileSync(targetPath, Buffer.from(item.dataBase64, "base64"));
+      importedPaths.push(targetPath);
+    }
+
+    return describeAttachments(importedPaths);
+  });
+
   ipcMain.handle("dialog:workspace", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ["openDirectory", "createDirectory"],
@@ -195,7 +256,40 @@ function registerHandlers() {
 
     const settings = getSettings();
     settings.workspacePath = result.filePaths[0];
+    settings.setup = {
+      ...(settings.setup || {}),
+      firstLaunchComplete: true,
+    };
     return saveSettings(userDataDir(), settings);
+  });
+
+  ipcMain.handle("chat:export", async (_event, payload) => {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: "Export chat",
+      defaultPath: `local-agent-chat-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+    fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), "utf8");
+    return { savedPath: result.filePath };
+  });
+
+  ipcMain.handle("chat:import", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Import chat",
+      properties: ["openFile"],
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePaths.length) {
+      return null;
+    }
+    const raw = fs.readFileSync(result.filePaths[0], "utf8");
+    return {
+      sourcePath: result.filePaths[0],
+      data: JSON.parse(raw),
+    };
   });
 
   ipcMain.handle("path:open", async (_event, targetPath) => {

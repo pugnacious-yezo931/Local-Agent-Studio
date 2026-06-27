@@ -1,7 +1,11 @@
 {
   "name": "local-agent-studio",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Local Agent Mode desktop app powered by Ollama, ComfyUI, web search APIs, and a local sandbox.",
+  "author": {
+    "name": "CrazyDashTool",
+    "email": "noreply@github.com"
+  },
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -9,7 +13,11 @@
     "dev": "concurrently -k -n vite,electron -c cyan,green \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env LOCAL_AGENT_DEV=1 electron .\"",
     "build": "tsc --noEmit && vite build",
     "start": "electron .",
-    "package:win": "npm run build && electron-builder --win nsis --x64"
+    "package:win": "npm run build && electron-builder --win nsis --x64",
+    "package:linux": "npm run build && electron-builder --linux tar.gz --x64",
+    "package:linux:installers": "npm run build && electron-builder --linux AppImage deb --x64",
+    "package:mac": "npm run build && electron-builder --mac dmg zip --x64 --arm64",
+    "package:all": "npm run build && electron-builder -mwl"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -37,11 +45,31 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "version.json",
       "package.json"
     ],
     "win": {
       "target": "nsis",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "category": "Utility"
+    },
+    "deb": {
+      "maintainer": "CrazyDashTool <noreply@github.com>"
     },
     "nsis": {
       "oneClick": false,

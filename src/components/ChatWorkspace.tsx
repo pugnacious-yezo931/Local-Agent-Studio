@@ -1,7 +1,9 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   Brain,
+  Check,
   ChevronDown,
   Copy,
   Database,
@@ -11,6 +13,8 @@ import {
   Globe2,
   Image,
   Paperclip,
+  Pencil,
+  Plug,
   Search,
   Send,
   Settings as SettingsIcon,
@@ -30,18 +34,87 @@ interface ChatWorkspaceProps {
   onToolModeChange: (mode: ToolMode) => void;
   onImageSettingsChange: (patch: Partial<Settings["image"]>) => void;
   onOllamaModelChange: (model: string) => void;
+  onThinkingChange: (thinking: Settings["ollama"]["thinking"]) => void;
+  onEditUserMessage: (messageId: string, content: string) => void;
   onSend: (message: string, attachments: Attachment[]) => void;
   onChooseWorkspace: () => void;
   onOpenSettings: () => void;
+  queueEnabled: boolean;
+  queueLength: number;
 }
 
-const imageModelLabels: Record<ImageModel, string> = {
+const imageModelLabels: Record<string, string> = {
   "z-image-turbo": "Z-Image-Turbo",
   "flux2-klein-9b": "Flux.2 klein 9b",
   "ideogram-v4": "Ideogram v4",
 };
 
 const ollamaModelPresets = ["auto", "gemma4:e2b", "gemma4:e4b"];
+const thinkingLabels: Record<string, string> = {
+  off: "Reasoning off",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
+interface LASSelectOption {
+  value: string;
+  label: string;
+}
+
+interface LASSelectProps {
+  id: string;
+  icon?: ReactNode;
+  value: string;
+  options: LASSelectOption[];
+  disabled?: boolean;
+  openId: string | null;
+  setOpenId: (id: string | null) => void;
+  onChange: (value: string) => void;
+  ariaLabel: string;
+}
+
+function LASSelect({ id, icon, value, options, disabled, openId, setOpenId, onChange, ariaLabel }: LASSelectProps) {
+  const open = openId === id;
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  return (
+    <div className={`las-select ${open ? "open" : ""}`}>
+      <button
+        className="las-select-trigger"
+        type="button"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onClick={() => setOpenId(open ? null : id)}
+      >
+        {icon ? <span className="las-select-icon">{icon}</span> : null}
+        <span>{selected?.label || value}</span>
+        <ChevronDown size={14} />
+      </button>
+      {open ? (
+        <div className="las-select-menu" role="listbox">
+          {options.map((option) => (
+            <button
+              className={option.value === value ? "las-select-option active" : "las-select-option"}
+              type="button"
+              key={option.value}
+              role="option"
+              aria-selected={option.value === value}
+              onClick={() => {
+                onChange(option.value);
+                setOpenId(null);
+              }}
+            >
+              <span>{option.label}</span>
+              {option.value === value ? <Check size={14} /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function MessageIcon({ role }: { role: ChatMessage["role"] }) {
   return <span className={`message-icon ${role}`}>{role === "assistant" ? <Bot size={17} /> : <User size={17} />}</span>;
@@ -60,6 +133,9 @@ function iconForTool(tool: ToolResult) {
   if (tool.type === "database") {
     return <Database size={13} />;
   }
+  if (tool.type === "mcp") {
+    return <Plug size={13} />;
+  }
   return <FileText size={13} />;
 }
 
@@ -71,6 +147,28 @@ function imageSrc(pathOrUrl?: string) {
     return pathOrUrl;
   }
   return `file:///${pathOrUrl.replace(/\\/g, "/")}`;
+}
+
+async function fileToAttachmentItem(file: File) {
+  const fileWithPath = file as File & { path?: string };
+  if (fileWithPath.path) {
+    return {
+      path: fileWithPath.path,
+      name: file.name,
+      mimeType: file.type,
+    };
+  }
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return {
+    name: file.name || `clipboard-${Date.now()}.png`,
+    mimeType: file.type || "application/octet-stream",
+    dataBase64: btoa(binary),
+  };
 }
 
 function getPayloadJobs(tool: ToolResult) {
@@ -275,14 +373,31 @@ export function ChatWorkspace({
   onToolModeChange,
   onImageSettingsChange,
   onOllamaModelChange,
+  onThinkingChange,
+  onEditUserMessage,
   onSend,
   onChooseWorkspace,
   onOpenSettings,
+  queueEnabled,
+  queueLength,
 }: ChatWorkspaceProps) {
   const [composer, setComposer] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [openSelectId, setOpenSelectId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const language = settings?.appearance.language || "en";
+
+  useEffect(() => {
+    function closeSelect(event: PointerEvent) {
+      if (!(event.target as HTMLElement | null)?.closest(".las-select")) {
+        setOpenSelectId(null);
+      }
+    }
+    document.addEventListener("pointerdown", closeSelect);
+    return () => document.removeEventListener("pointerdown", closeSelect);
+  }, []);
 
   useEffect(() => {
     window.requestAnimationFrame(() => {
@@ -302,8 +417,26 @@ export function ChatWorkspace({
 
   const ollamaOptions = useMemo(() => {
     const current = settings?.ollama.model || "auto";
-    return ollamaModelPresets.includes(current) ? ollamaModelPresets : [...ollamaModelPresets, current];
+    const list = ollamaModelPresets.includes(current) ? ollamaModelPresets : [...ollamaModelPresets, current];
+    return list.map((model) => ({ value: model, label: model }));
   }, [settings?.ollama.model]);
+  const thinkingValue = ["low", "medium", "high"].includes(settings?.ollama.thinking || "") ? settings!.ollama.thinking : "off";
+  const thinkingOptions = useMemo(
+    () => [
+      { value: "off", label: "Off" },
+      { value: "low", label: "Low" },
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+    ],
+    [],
+  );
+  const imageModelOptions = useMemo(() => {
+    const builtIns = Object.keys(imageModelLabels).map((id) => ({ value: id, label: imageModelLabels[id] }));
+    const custom = settings?.image.customModels?.map((model) => ({ value: model.id, label: model.label || model.id })) || [];
+    const current = settings?.image.model || "z-image-turbo";
+    const merged = [...builtIns, ...custom].filter((model) => model.value);
+    return merged.some((model) => model.value === current) ? merged : [...merged, { value: current, label: current }];
+  }, [settings?.image.customModels, settings?.image.model]);
 
   async function attachFiles() {
     const selected = await window.localAgent.chooseAttachments();
@@ -312,9 +445,35 @@ export function ChatWorkspace({
     }
   }
 
+  async function importFiles(files: File[] | FileList) {
+    const list = Array.from(files).filter(Boolean);
+    if (!list.length) {
+      return;
+    }
+    const items = await Promise.all(list.map(fileToAttachmentItem));
+    const imported = await window.localAgent.importAttachments({ items });
+    if (imported.length) {
+      setAttachments((current) => [...current, ...imported]);
+    }
+  }
+
+  function beginEdit(message: ChatMessage) {
+    setEditingMessageId(message.id);
+    setEditingText(message.content);
+  }
+
+  function saveEditedMessage() {
+    if (!editingMessageId) {
+      return;
+    }
+    onEditUserMessage(editingMessageId, editingText);
+    setEditingMessageId(null);
+    setEditingText("");
+  }
+
   function submit(event?: FormEvent) {
     event?.preventDefault();
-    if ((!composer.trim() && !attachments.length) || busy) {
+    if ((!composer.trim() && !attachments.length) || (busy && !queueEnabled)) {
       return;
     }
     onSend(composer, attachments);
@@ -326,51 +485,67 @@ export function ChatWorkspace({
   const workspaceLabel = settings?.workspacePath ? settings.workspacePath.split(/[\\/]/).pop() || settings.workspacePath : t(language, "noDirectory");
 
   return (
-    <section className="chat-view">
+    <section
+      className="chat-view"
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        void importFiles(event.dataTransfer.files);
+      }}
+    >
       <header className="chat-header">
         <div className="chat-title-block">
           <h1>{t(language, "localAgent")}</h1>
           <div className="header-select-row">
-            <label className="select-shell">
-              <select value={settings?.ollama.model || "auto"} disabled={!settings} onChange={(event) => onOllamaModelChange(event.target.value)} aria-label="Ollama model">
-                {ollamaOptions.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} />
-            </label>
-            <label className="select-shell">
-              <Image size={14} />
-              <select
-                value={imageSettings?.model || "z-image-turbo"}
-                disabled={!settings}
-                onChange={(event) => onImageSettingsChange({ model: event.target.value as ImageModel })}
-                aria-label="Image model"
-              >
-                {(Object.keys(imageModelLabels) as ImageModel[]).map((model) => (
-                  <option key={model} value={model}>
-                    {imageModelLabels[model]}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} />
-            </label>
+            <LASSelect
+              id="ollama-model"
+              value={settings?.ollama.model || "auto"}
+              options={ollamaOptions}
+              disabled={!settings}
+              openId={openSelectId}
+              setOpenId={setOpenSelectId}
+              onChange={onOllamaModelChange}
+              ariaLabel="Ollama model"
+            />
+            <LASSelect
+              id="reasoning"
+              icon={<Brain size={14} />}
+              value={thinkingValue}
+              options={thinkingOptions}
+              disabled={!settings}
+              openId={openSelectId}
+              setOpenId={setOpenSelectId}
+              onChange={(value) => onThinkingChange(value as Settings["ollama"]["thinking"])}
+              ariaLabel="Reasoning"
+            />
+            <LASSelect
+              id="image-model"
+              icon={<Image size={14} />}
+              value={imageSettings?.model || "z-image-turbo"}
+              options={imageModelOptions}
+              disabled={!settings}
+              openId={openSelectId}
+              setOpenId={setOpenSelectId}
+              onChange={(value) => onImageSettingsChange({ model: value as ImageModel })}
+              ariaLabel="Image model"
+            />
             {(imageSettings?.model || "z-image-turbo") === "ideogram-v4" ? (
-              <label className="select-shell compact">
-                <select
-                  value={imageSettings?.ideogramEffort || "default"}
-                  disabled={!settings}
-                  onChange={(event) => onImageSettingsChange({ ideogramEffort: event.target.value as IdeogramEffort })}
-                  aria-label="Ideogram effort"
-                >
-                  <option value="turbo">turbo</option>
-                  <option value="default">default</option>
-                  <option value="quality">quality</option>
-                </select>
-                <ChevronDown size={14} />
-              </label>
+              <LASSelect
+                id="ideogram-effort"
+                value={imageSettings?.ideogramEffort || "default"}
+                options={[
+                  { value: "turbo", label: "Turbo" },
+                  { value: "default", label: "Default" },
+                  { value: "quality", label: "Quality" },
+                ]}
+                disabled={!settings}
+                openId={openSelectId}
+                setOpenId={setOpenSelectId}
+                onChange={(value) => onImageSettingsChange({ ideogramEffort: value as IdeogramEffort })}
+                ariaLabel="Ideogram effort"
+              />
             ) : null}
           </div>
         </div>
@@ -383,7 +558,10 @@ export function ChatWorkspace({
               </button>
             ))}
           </div>
-          <span className={`stream-status ${busy ? "busy" : ""}`}>{busy ? t(language, "streaming") : t(language, "ready")}</span>
+          <span className={`stream-status ${busy ? "busy" : ""}`}>
+            {busy ? t(language, "streaming") : t(language, "ready")}
+            {queueLength ? ` · Queue ${queueLength}` : ""}
+          </span>
           <button className="icon-button" type="button" onClick={onOpenSettings} aria-label="Open settings">
             <SettingsIcon size={18} />
           </button>
@@ -402,10 +580,34 @@ export function ChatWorkspace({
                     <span>{message.createdAt}</span>
                   </div>
                 ) : null}
-                <MarkdownMessage content={message.content} />
+                {message.role === "user" && editingMessageId === message.id ? (
+                  <div className="edit-message-box">
+                    <textarea value={editingText} rows={3} onChange={(event) => setEditingText(event.target.value)} autoFocus />
+                    <div className="edit-message-actions">
+                      <button className="quiet-button icon-text" type="button" onClick={() => setEditingMessageId(null)}>
+                        <X size={14} />
+                        Cancel
+                      </button>
+                      <button className="primary-button" type="button" onClick={saveEditedMessage}>
+                        <Check size={14} />
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <MarkdownMessage content={message.content} />
+                )}
                 <AttachmentChips attachments={message.attachments || []} />
+                {message.role === "user" && message.editedAt ? <small className="edited-label">Edited {message.editedAt}</small> : null}
                 <ReasoningPanel thinking={message.thinking} language={language} />
                 <ToolResultStrip message={message} language={language} />
+                {message.role === "user" && !message.pending ? (
+                  <div className="message-actions">
+                    <button type="button" aria-label="Edit message" disabled={busy} onClick={() => beginEdit(message)}>
+                      <Pencil size={15} />
+                    </button>
+                  </div>
+                ) : null}
                 {message.role === "assistant" && message.content ? (
                   <div className="message-actions">
                     <button type="button" aria-label="Copy response" onClick={() => navigator.clipboard?.writeText(message.content)}>
@@ -428,6 +630,12 @@ export function ChatWorkspace({
             placeholder={placeholder}
             rows={1}
             onChange={(event) => setComposer(event.target.value)}
+            onPaste={(event) => {
+              if (event.clipboardData.files.length) {
+                event.preventDefault();
+                void importFiles(event.clipboardData.files);
+              }
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -457,7 +665,7 @@ export function ChatWorkspace({
                 <span>{workspaceLabel}</span>
               </button>
               <span className="language-mini">{languageLabels[language]}</span>
-              <button className="send-button" type="submit" disabled={busy || (!composer.trim() && !attachments.length)} aria-label="Send message">
+              <button className="send-button" type="submit" disabled={(busy && !queueEnabled) || (!composer.trim() && !attachments.length)} aria-label="Send message">
                 <Send size={18} />
               </button>
             </div>

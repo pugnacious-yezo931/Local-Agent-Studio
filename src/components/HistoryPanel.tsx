@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from "lucide-react";
+import { Download, MessageSquarePlus, Upload } from "lucide-react";
 import { t } from "../i18n";
 import type { ChatMessage, Settings } from "../types";
 
@@ -7,9 +7,11 @@ interface HistoryPanelProps {
   settings: Settings | null;
   onNewChat: () => void;
   onBackToChat: () => void;
+  onExportChat: () => void;
+  onImportChat: () => void;
 }
 
-export function HistoryPanel({ messages, settings, onNewChat, onBackToChat }: HistoryPanelProps) {
+export function HistoryPanel({ messages, settings, onNewChat, onBackToChat, onExportChat, onImportChat }: HistoryPanelProps) {
   const language = settings?.appearance.language || "en";
   const userMessages = messages.filter((message) => message.role === "user");
 
@@ -19,10 +21,20 @@ export function HistoryPanel({ messages, settings, onNewChat, onBackToChat }: Hi
         <div>
           <h1>{t(language, "history")}</h1>
         </div>
-        <button className="primary-button" type="button" onClick={onNewChat}>
-          <MessageSquarePlus size={16} />
-          {t(language, "newChat")}
-        </button>
+        <div className="workspace-header-actions">
+          <button className="quiet-button icon-text" type="button" onClick={onImportChat}>
+            <Upload size={15} />
+            Import
+          </button>
+          <button className="quiet-button icon-text" type="button" onClick={onExportChat}>
+            <Download size={15} />
+            Export
+          </button>
+          <button className="primary-button" type="button" onClick={onNewChat}>
+            <MessageSquarePlus size={16} />
+            {t(language, "newChat")}
+          </button>
+        </div>
       </header>
       <div className="history-list">
         {userMessages.length ? (

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { FolderOpen, Save, X } from "lucide-react";
+import { FolderOpen, RefreshCw, Save, X } from "lucide-react";
 import { languageLabels } from "../i18n";
-import type { IdeogramEffort, ImageModel, LanguageCode, SearchProvider, Settings, ThemeMode, ThinkingMode } from "../types";
+import type { IdeogramEffort, ImageModel, LanguageCode, McpServerConfig, SearchProvider, Settings, ThemeMode, ThinkingMode, ToolPermission } from "../types";
 
 interface SettingsDrawerProps {
   settings: Settings;
@@ -16,6 +16,10 @@ function cloneSettings(settings: Settings): Settings {
 
 export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }: SettingsDrawerProps) {
   const [draft, setDraft] = useState<Settings>(() => cloneSettings(settings));
+  const [customModelsText, setCustomModelsText] = useState(() => JSON.stringify(settings.image.customModels || [], null, 2));
+  const [mcpServersText, setMcpServersText] = useState(() => JSON.stringify(settings.mcp?.servers || [], null, 2));
+  const [jsonError, setJsonError] = useState("");
+  const [updateStatus, setUpdateStatus] = useState("");
   const [saving, setSaving] = useState(false);
 
   function patch<T extends keyof Settings>(section: T, value: Partial<Settings[T]>) {
@@ -31,9 +35,38 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
   async function save() {
     setSaving(true);
     try {
-      await onSave(draft);
+      const customModels = JSON.parse(customModelsText || "[]");
+      const mcpServers = JSON.parse(mcpServersText || "[]") as McpServerConfig[];
+      setJsonError("");
+      await onSave({
+        ...draft,
+        image: {
+          ...draft.image,
+          customModels,
+        },
+        mcp: {
+          ...draft.mcp,
+          servers: mcpServers,
+        },
+      });
+    } catch (error) {
+      setJsonError(error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
+    }
+  }
+
+  const permissionOptions: ToolPermission[] = ["allow", "ask", "deny"];
+
+  async function checkUpdatesNow() {
+    setUpdateStatus("Checking...");
+    const result = await window.localAgent.checkUpdates();
+    if (result.error) {
+      setUpdateStatus(result.error);
+    } else if (result.updateAvailable) {
+      setUpdateStatus(`Update available: ${result.latestVersion} (${result.url || "release page"})`);
+    } else {
+      setUpdateStatus(`Up to date: ${result.currentVersion}`);
     }
   }
 
@@ -87,6 +120,19 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
           </section>
 
           <section>
+            <h3>Local Context</h3>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={draft.context?.includeLocalDateTime ?? true}
+                onChange={(event) => patch("context", { includeLocalDateTime: event.target.checked })}
+              />
+              Share this PC date and time with the LLM
+            </label>
+            <p className="settings-note">The assistant will use your computer date/time for date awareness instead of guessing or searching for the date.</p>
+          </section>
+
+          <section>
             <h3>Agent Limits</h3>
             <div className="two-col">
               <label>
@@ -109,6 +155,42 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
                   onChange={(event) => patch("agent", { maxImageJobs: Number(event.target.value) })}
                 />
               </label>
+              <label>
+                Tool steps
+                <input
+                  type="number"
+                  min="1"
+                  max="8"
+                  value={draft.agent.maxToolSteps}
+                  onChange={(event) => patch("agent", { maxToolSteps: Number(event.target.value) })}
+                />
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={draft.agent.taskQueue}
+                  onChange={(event) => patch("agent", { taskQueue: event.target.checked })}
+                />
+                Agent task queue
+              </label>
+            </div>
+          </section>
+
+          <section>
+            <h3>Tool Permissions</h3>
+            <div className="two-col">
+              {(Object.keys(draft.permissions) as Array<keyof Settings["permissions"]>).map((key) => (
+                <label key={key}>
+                  {key}
+                  <select value={draft.permissions[key]} onChange={(event) => patch("permissions", { [key]: event.target.value as ToolPermission })}>
+                    {permissionOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
             </div>
           </section>
 
@@ -134,13 +216,10 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
             <label>
               Reasoning
               <select value={draft.ollama.thinking} onChange={(event) => patch("ollama", { thinking: event.target.value as ThinkingMode })}>
-                <option value="auto">auto</option>
                 <option value="off">off</option>
-                <option value="on">on</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>
-                <option value="max">max</option>
               </select>
             </label>
             <div className="two-col">
@@ -194,6 +273,50 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
                 value={draft.ollamaSearch.apiKey}
                 onChange={(event) => patch("ollamaSearch", { apiKey: event.target.value })}
               />
+            </label>
+          </section>
+
+          <section>
+            <h3>Runpod</h3>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={draft.runpod.enabled} onChange={(event) => patch("runpod", { enabled: event.target.checked })} />
+              Enable Runpod provider
+            </label>
+            <label>
+              API key
+              <input type="password" value={draft.runpod.apiKey} onChange={(event) => patch("runpod", { apiKey: event.target.value })} />
+            </label>
+            <label>
+              Endpoint ID
+              <input value={draft.runpod.endpointId} onChange={(event) => patch("runpod", { endpointId: event.target.value })} />
+            </label>
+            <label>
+              Base URL
+              <input value={draft.runpod.baseUrl} onChange={(event) => patch("runpod", { baseUrl: event.target.value })} />
+            </label>
+            <label>
+              Ollama-compatible URL
+              <input value={draft.runpod.ollamaBaseUrl} onChange={(event) => patch("runpod", { ollamaBaseUrl: event.target.value })} />
+            </label>
+            <label>
+              ComfyUI URL
+              <input value={draft.runpod.comfyBaseUrl} onChange={(event) => patch("runpod", { comfyBaseUrl: event.target.value })} />
+            </label>
+          </section>
+
+          <section>
+            <h3>MCP</h3>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={draft.mcp.enabled} onChange={(event) => patch("mcp", { enabled: event.target.checked })} />
+              Enable MCP tools
+            </label>
+            <label>
+              Timeout ms
+              <input type="number" min="1000" step="1000" value={draft.mcp.timeoutMs} onChange={(event) => patch("mcp", { timeoutMs: Number(event.target.value) })} />
+            </label>
+            <label>
+              Servers JSON
+              <textarea rows={8} value={mcpServersText} onChange={(event) => setMcpServersText(event.target.value)} spellCheck={false} />
             </label>
           </section>
 
@@ -271,6 +394,10 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
               Ideogram v4 workflow
               <input value={draft.image.ideogramWorkflowPath} onChange={(event) => patch("image", { ideogramWorkflowPath: event.target.value })} />
             </label>
+            <label>
+              Custom models JSON
+              <textarea rows={8} value={customModelsText} onChange={(event) => setCustomModelsText(event.target.value)} spellCheck={false} />
+            </label>
           </section>
 
           <section>
@@ -287,6 +414,9 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
               <select value={draft.sandbox.shell} onChange={(event) => patch("sandbox", { shell: event.target.value as Settings["sandbox"]["shell"] })}>
                 <option value="powershell">PowerShell</option>
                 <option value="cmd">cmd.exe</option>
+                <option value="bash">bash</option>
+                <option value="zsh">zsh</option>
+                <option value="sh">sh</option>
               </select>
             </label>
             <label>
@@ -294,9 +424,35 @@ export function SettingsDrawer({ settings, onCancel, onSave, onChooseWorkspace }
               <input value={draft.sandbox.dockerImage} onChange={(event) => patch("sandbox", { dockerImage: event.target.value })} />
             </label>
           </section>
+
+          <section>
+            <h3>Updates</h3>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={draft.updates.enabled} onChange={(event) => patch("updates", { enabled: event.target.checked })} />
+              Enable update checks
+            </label>
+            <label>
+              GitHub repo
+              <input value={draft.updates.repo} onChange={(event) => patch("updates", { repo: event.target.value })} />
+            </label>
+            <label>
+              Version file URL
+              <input value={draft.updates.versionUrl} onChange={(event) => patch("updates", { versionUrl: event.target.value })} />
+            </label>
+            <label>
+              Current version
+              <input value={draft.updates.currentVersion} onChange={(event) => patch("updates", { currentVersion: event.target.value })} disabled />
+            </label>
+            <button className="quiet-button icon-text" type="button" onClick={checkUpdatesNow}>
+              <RefreshCw size={15} />
+              Check for update
+            </button>
+            {updateStatus ? <span className="workspace-status">{updateStatus}</span> : null}
+          </section>
         </div>
 
         <div className="drawer-footer">
+          {jsonError ? <span className="settings-error">{jsonError}</span> : null}
           <button className="quiet-button" type="button" onClick={onCancel}>
             Cancel
           </button>

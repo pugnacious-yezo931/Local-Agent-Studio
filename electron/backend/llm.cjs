@@ -3,6 +3,7 @@ const { endpoint, fetchJson } = require("./fetch.cjs");
 const { searchWeb } = require("./search.cjs");
 const { queueComfyPrompt } = require("./comfy.cjs");
 const { createDatabaseFromText } = require("./data.cjs");
+const { callMcpTool } = require("./mcp.cjs");
 const { runCommand } = require("./sandbox.cjs");
 const {
   appendTextFile,
@@ -36,6 +37,7 @@ const TOOL_ACTIONS = new Set([
   "run_command",
   "create_database",
   "generate_image",
+  "mcp_call",
 ]);
 
 function clamp(value, min, max) {
@@ -48,6 +50,24 @@ function clamp(value, min, max) {
 
 function lastUser(messages) {
   return [...messages].reverse().find((message) => message.role === "user") || { content: "", attachments: [] };
+}
+
+function runtimeProviderSettings(settings) {
+  if (!settings.runpod?.enabled) {
+    return settings;
+  }
+  return {
+    ...settings,
+    ollama: {
+      ...settings.ollama,
+      baseUrl: settings.runpod.ollamaBaseUrl || settings.ollama.baseUrl,
+      apiKey: settings.runpod.apiKey || settings.ollama.apiKey,
+    },
+    comfy: {
+      ...settings.comfy,
+      baseUrl: settings.runpod.comfyBaseUrl || settings.comfy.baseUrl,
+    },
+  };
 }
 
 function compactContent(message) {
@@ -143,14 +163,24 @@ function fallbackSearchQuery(messages) {
   return (lastUser(messages).content || "").replace(/^\/search\s+/i, "").trim();
 }
 
-function shouldSearch(messages, toolMode) {
+function isLocalDateQuestion(text) {
+  return /(what(?:'s| is)? (?:the )?(?:date|day|time)|today(?:'s)? date|current (?:date|time)|какая .*дата|какой .*день|сколько времени|которая година|jaka .*data|wie spät|welches datum)/i.test(
+    text || "",
+  );
+}
+
+function shouldSearch(messages, toolMode, settings) {
   if (toolMode === "web") {
     return true;
   }
   if (toolMode === "none") {
     return false;
   }
-  return SEARCH_TRIGGER.test(lastUser(messages).content || "");
+  const text = lastUser(messages).content || "";
+  if (settings?.context?.includeLocalDateTime && isLocalDateQuestion(text)) {
+    return false;
+  }
+  return SEARCH_TRIGGER.test(text);
 }
 
 async function resolveModel(settings, headers) {
@@ -236,19 +266,40 @@ function buildSystemPrompt(searchContext, settings) {
   const contextBlock = searchContext
     ? `\n\nWeb search context collected from up to ${clamp(settings.agent?.maxWebSearches ?? 3, 1, 3)} searches:\n${searchContext}\n\nUse the context to synthesize a clear answer. Cite sources inline like [1] only for facts that came from the web. Do not dump raw snippets or URL lists into the main answer.`
     : "";
+  const dateBlock = settings.context?.includeLocalDateTime
+    ? `\nCurrent local date/time from this PC: ${new Date().toString()}. Use this for date awareness unless the user asks for current external facts that require web search.`
+    : "";
 
-  return `You are Local Agent Studio, a local-first desktop agent running on the user's Windows machine.
+  return `You are Local Agent Studio, a local-first desktop agent running on the user's desktop machine.
 Answer in the user's language unless the UI asks otherwise. Be concise, practical, and honest about tool state.
 Use Markdown naturally: short sections, bullets when useful, fenced code blocks for code, and bold text for emphasis.
 Available integrations are executed by the app before or during the answer: Ollama chat, ComfyUI image workflows, web search, workspace file operations, local databases, and sandbox commands.
 When the user attaches an image and asks what is in it, describe or analyze the attached image. Do not switch to image generation unless the user explicitly asks to create, generate, draw, render, or make a new visual asset.
-Never claim that a search, file operation, image job, database creation, or command was executed unless a tool result is present. If a needed tool failed or is not configured, say that directly and explain what setting is missing.${contextBlock}`;
+Never claim that a search, file operation, image job, database creation, or command was executed unless a tool result is present. If a needed tool failed or is not configured, say that directly and explain what setting is missing.${dateBlock}${contextBlock}`;
 }
 
 async function gatherSearchContext({ messages, settings, toolMode, headers, model, onEvent }) {
-  const attempted = shouldSearch(messages, toolMode);
+  const attempted = shouldSearch(messages, toolMode, settings);
   if (!attempted) {
     return { attempted: false, searchContext: "", toolResults: [] };
+  }
+  if ((settings.permissions?.search || "allow") !== "allow") {
+    const mode = settings.permissions?.search || "ask";
+    const failed = {
+      type: "search",
+      label: "Web search",
+      status: "error",
+      results: [],
+      payload: {
+        permission: mode,
+        message:
+          mode === "deny"
+            ? "Web search is disabled in Tool Permissions."
+            : "Web search requires confirmation. Change Search permission to allow in Settings to let the agent search automatically.",
+      },
+    };
+    onEvent?.({ type: "tool-finish", toolResult: failed });
+    return { attempted: true, searchContext: "", toolResults: [failed] };
   }
 
   const maxQueries = clamp(settings.agent?.maxWebSearches ?? 3, 1, 3);
@@ -393,7 +444,7 @@ function normalizeToolDecision(decision, settings) {
   }
 
   const maxImageJobs = clamp(settings.agent?.maxImageJobs || 3, 1, 3);
-  const allowedModels = new Set(["z-image-turbo", "flux2-klein-9b", "ideogram-v4"]);
+  const allowedModels = new Set(["z-image-turbo", "flux2-klein-9b", "ideogram-v4", ...(settings.image?.customModels || []).map((model) => model.id)]);
   const allowedEffort = new Set(["turbo", "default", "quality"]);
 
   return {
@@ -410,6 +461,9 @@ function normalizeToolDecision(decision, settings) {
     ideogramEffort: allowedEffort.has(decision.ideogramEffort)
       ? decision.ideogramEffort
       : settings.image?.ideogramEffort || "default",
+    serverName: String(decision.serverName || "").trim(),
+    toolName: String(decision.toolName || "").trim(),
+    toolArguments: decision.toolArguments && typeof decision.toolArguments === "object" ? decision.toolArguments : {},
     reason: String(decision.reason || "").trim(),
   };
 }
@@ -421,6 +475,13 @@ async function decideToolWithOllama({ messages, settings, headers, model, observ
     .slice(-8)
     .map((message) => `${message.role}: ${message.content}`)
     .join("\n\n");
+  const imageModels = [
+    "z-image-turbo",
+    "flux2-klein-9b",
+    "ideogram-v4",
+    ...(settings.image?.customModels || []).map((item) => item.id).filter(Boolean),
+  ];
+  const localDateContext = settings.context?.includeLocalDateTime ? new Date().toString() : "disabled";
 
   const payload = {
     model,
@@ -433,7 +494,7 @@ You may be called several times for the same user request. Use the observations 
 
 Return only valid JSON with this schema:
 {
-  "action": "answer" | "write_file" | "read_file" | "append_file" | "delete_path" | "list_files" | "run_command" | "create_database" | "generate_image",
+  "action": "answer" | "write_file" | "read_file" | "append_file" | "delete_path" | "list_files" | "run_command" | "create_database" | "generate_image" | "mcp_call",
   "filePath": "relative workspace path, when a file/path action is needed",
   "content": "complete file content to write or append, when needed",
   "command": "terminal command, when action is run_command",
@@ -443,6 +504,9 @@ Return only valid JSON with this schema:
   "count": 1,
   "imageModel": "z-image-turbo" | "flux2-klein-9b" | "ideogram-v4",
   "ideogramEffort": "turbo" | "default" | "quality",
+  "serverName": "MCP server name, when action is mcp_call",
+  "toolName": "MCP tool name, when action is mcp_call",
+  "toolArguments": {},
   "reason": "short reason"
 }
 
@@ -454,6 +518,8 @@ Rules:
 - Infer file extensions from the requested artifact. Python code must be ".py", JavaScript ".js", TypeScript ".ts", Markdown ".md", JSON ".json", CSV ".csv", HTML ".html", CSS ".css", PowerShell ".ps1".
 - Use create_database for requests to build/import/convert objects into a local database.
 - Use generate_image only for a new visual asset. If the user attaches an image and asks what is on it, choose answer.
+- Available image models: ${imageModels.join(", ")}.
+- Use mcp_call only when the user explicitly asks for a configured MCP tool/server or when the needed capability is clearly external to built-in tools.
 - Use run_command only when the user asks to execute a shell/CLI command or a task that clearly requires CLI execution.
 - After a tool succeeds, choose another tool only if it helps finish the user's request. Do not repeat the same failed action.
 - Choose answer when the requested work is complete or when the next step is normal conversation.
@@ -472,6 +538,9 @@ ${last.content || ""}
 
 Attachments:
 ${attachmentSummary || "none"}
+
+Local date/time from this PC:
+${localDateContext}
 
 Tool observations so far:
 ${observations.length ? observations.join("\n\n") : "none"}`,
@@ -603,9 +672,67 @@ function terminalSummary(result) {
   }`;
 }
 
+function permissionForDecision(decision) {
+  if (decision.action === "run_command") {
+    return ["terminal", "Terminal run"];
+  }
+  if (decision.action === "generate_image") {
+    return ["images", "Image generation"];
+  }
+  if (decision.action === "create_database") {
+    return ["database", "Database write"];
+  }
+  if (decision.action === "mcp_call") {
+    return ["mcp", "MCP tool call"];
+  }
+  if (
+    decision.action === "write_file" ||
+    decision.action === "append_file" ||
+    decision.action === "read_file" ||
+    decision.action === "delete_path" ||
+    decision.action === "list_files"
+  ) {
+    return ["files", "Workspace file"];
+  }
+  return [null, "Tool"];
+}
+
+function permissionDeniedResponse({ decision, settings, onEvent }) {
+  const [key, label] = permissionForDecision(decision);
+  const mode = key ? settings.permissions?.[key] || "allow" : "allow";
+  if (mode === "allow") {
+    return null;
+  }
+
+  const result = {
+    type: key === "images" ? "comfy" : key === "terminal" ? "terminal" : key === "database" ? "database" : key === "mcp" ? "mcp" : "file",
+    label,
+    status: "error",
+    payload: {
+      action: decision.action,
+      permission: mode,
+      message:
+        mode === "deny"
+          ? `${label} is disabled in Tool Permissions.`
+          : `${label} requires confirmation. Change this permission to "allow" in Settings to let the agent run it automatically.`,
+    },
+  };
+  onEvent?.({ type: "tool-finish", toolResult: result });
+  return {
+    content: result.payload.message,
+    model: "permissions",
+    toolResults: [result],
+  };
+}
+
 async function executeToolDecision({ decision, settings, onEvent }) {
   if (!decision || decision.action === "answer") {
     return null;
+  }
+
+  const blocked = permissionDeniedResponse({ decision, settings, onEvent });
+  if (blocked) {
+    return blocked;
   }
 
   if (decision.action === "write_file" || decision.action === "append_file" || decision.action === "read_file" || decision.action === "delete_path" || decision.action === "list_files") {
@@ -760,6 +887,50 @@ async function executeToolDecision({ decision, settings, onEvent }) {
     }
   }
 
+  if (decision.action === "mcp_call") {
+    const running = {
+      type: "mcp",
+      label: `MCP ${decision.serverName || "server"}:${decision.toolName || "tool"}`,
+      status: "running",
+      payload: decision,
+    };
+    onEvent?.({ type: "tool-start", toolResult: running });
+    try {
+      const result = await callMcpTool({
+        settings,
+        serverName: decision.serverName,
+        toolName: decision.toolName,
+        args: decision.toolArguments || {},
+      });
+      const finished = {
+        ...running,
+        status: "done",
+        payload: result,
+      };
+      onEvent?.({ type: "tool-finish", toolResult: finished });
+      return {
+        content: `MCP tool \`${decision.toolName}\` on \`${decision.serverName}\` completed.\n\n\`\`\`json\n${JSON.stringify(result.result ?? result, null, 2)}\n\`\`\``,
+        model: "mcp",
+        toolResults: [finished],
+      };
+    } catch (error) {
+      const failed = {
+        ...running,
+        status: "error",
+        payload: {
+          ...decision,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      };
+      onEvent?.({ type: "tool-finish", toolResult: failed });
+      return {
+        content: `I could not run the MCP tool: ${failed.payload.message}`,
+        model: "mcp",
+        toolResults: [failed],
+      };
+    }
+  }
+
   if (decision.action === "generate_image") {
     return maybeRunImageGeneration({ parsed: decision, settings, onEvent });
   }
@@ -803,7 +974,7 @@ ${observations.join("\n\n")}`,
       num_ctx: Number(settings.ollama.contextTokens ?? 8192),
     },
   };
-  const think = thinkValue(settings);
+  const think = thinkValue(settings, messages);
   if (think !== undefined) {
     payload.think = think;
   }
@@ -1357,21 +1528,39 @@ async function streamChat({ payload, settings, headers, onEvent }) {
   }
 }
 
-function thinkValue(settings) {
-  const mode = settings.ollama?.thinking || "auto";
-  if (mode === "on") {
-    return true;
+function messageThinkOverride(messages) {
+  const text = lastUser(messages).content || "";
+  if (/(^|\s)--no-think\b/i.test(text)) {
+    return false;
   }
+  const match = text.match(/(^|\s)--think(?:\s+(low|medium|high|off))?\b/i);
+  if (!match) {
+    return undefined;
+  }
+  const value = (match[2] || "high").toLowerCase();
+  if (value === "off") {
+    return false;
+  }
+  return value;
+}
+
+function thinkValue(settings, messages) {
+  const override = messages ? messageThinkOverride(messages) : undefined;
+  if (override !== undefined) {
+    return override;
+  }
+  const mode = settings.ollama?.thinking || "off";
   if (mode === "off") {
     return false;
   }
-  if (["low", "medium", "high", "max"].includes(mode)) {
+  if (["low", "medium", "high"].includes(mode)) {
     return mode;
   }
   return undefined;
 }
 
 async function runAgentMessage({ messages, settings, toolMode, stream, onEvent }) {
+  settings = runtimeProviderSettings(settings);
   const headers = { "Content-Type": "application/json" };
   if (settings.ollama.apiKey) {
     headers.Authorization = `Bearer ${settings.ollama.apiKey}`;
@@ -1438,7 +1627,7 @@ async function runAgentMessage({ messages, settings, toolMode, stream, onEvent }
       num_ctx: Number(settings.ollama.contextTokens ?? 8192),
     },
   };
-  const think = thinkValue(settings);
+  const think = thinkValue(settings, messages);
   if (think !== undefined) {
     payload.think = think;
   }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Folder, FolderOpen, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Download, FileText, Folder, FolderOpen, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { t } from "../i18n";
 import type { Settings, WorkspaceFile } from "../types";
 
@@ -71,6 +71,16 @@ export function WorkspacePanel({ settings, onChooseWorkspace }: WorkspacePanelPr
     await refresh();
   }
 
+  async function downloadFile() {
+    if (!selected || selected.type !== "file") {
+      return;
+    }
+    const result = await window.localAgent.exportFile({ filePath: selected.relativePath });
+    if (result?.savedPath) {
+      setStatus(`Saved copy to ${result.savedPath}`);
+    }
+  }
+
   return (
     <section className="workspace-view">
       <header className="workspace-header">
@@ -124,19 +134,35 @@ export function WorkspacePanel({ settings, onChooseWorkspace }: WorkspacePanelPr
                 <Trash2 size={15} />
                 Delete
               </button>
+              <button className="quiet-button icon-text" type="button" onClick={downloadFile} disabled={!selected || selected.type !== "file"}>
+                <Download size={15} />
+                Download
+              </button>
               <button className="primary-button" type="button" onClick={saveFile} disabled={!selected || selected.type !== "file" || !selected.isText}>
                 <Save size={15} />
                 {t(language, "save")}
               </button>
             </div>
           </div>
-          <textarea
-            className="editor-textarea"
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            disabled={!selected || selected.type !== "file" || !selected.isText}
-            spellCheck={false}
-          />
+          {selected && selected.type === "file" && !selected.isText ? (
+            <div className="file-preview-panel">
+              <FileText size={28} />
+              <strong>{selected.name}</strong>
+              <span>{Math.max(1, Math.round(selected.size / 1024))} KB</span>
+              <button className="quiet-button icon-text" type="button" onClick={() => window.localAgent.showPath(selected.absolutePath)}>
+                <FolderOpen size={15} />
+                Show in folder
+              </button>
+            </div>
+          ) : (
+            <textarea
+              className="editor-textarea"
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              disabled={!selected || selected.type !== "file" || !selected.isText}
+              spellCheck={false}
+            />
+          )}
           {status ? <div className="workspace-status">{status}</div> : null}
         </main>
       </div>

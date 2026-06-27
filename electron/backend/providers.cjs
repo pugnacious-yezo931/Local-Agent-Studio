@@ -79,6 +79,7 @@ function workflowStatus(settings) {
     ["Z-Image-Turbo", settings.image?.zImageWorkflowPath],
     ["Flux.2 klein 9b", settings.image?.fluxWorkflowPath],
     ["Ideogram v4", settings.image?.ideogramWorkflowPath],
+    ...(settings.image?.customModels || []).map((model) => [model.label || model.id, model.workflowPath]),
   ];
   const missing = workflowPaths.filter(([, filePath]) => !filePath || !fs.existsSync(filePath)).map(([name]) => name);
 
@@ -89,6 +90,37 @@ function workflowStatus(settings) {
     "electron/workflows",
     missing.length === 0,
     missing.length ? `Не найдены workflow: ${missing.join(", ")}` : "Z-Image, Flux.2 и Ideogram v4 workflow найдены",
+  );
+}
+
+function runpodStatus(settings) {
+  const enabled = Boolean(settings.runpod?.enabled);
+  const endpoint = settings.runpod?.baseUrl || settings.runpod?.ollamaBaseUrl || settings.runpod?.comfyBaseUrl || settings.runpod?.endpointId || "not configured";
+  return configured(
+    "runpod",
+    "Runpod",
+    "Remote Provider",
+    endpoint,
+    enabled && Boolean(endpoint && endpoint !== "not configured"),
+    enabled
+      ? "Runpod remote endpoints are configured for LLM/ComfyUI/MCP-style workloads."
+      : "Disabled. Enable Runpod in Settings to use remote workloads.",
+  );
+}
+
+function mcpStatus(settings) {
+  const servers = (settings.mcp?.servers || []).filter((server) => server.enabled);
+  return configured(
+    "mcp",
+    "MCP Servers",
+    "Tools",
+    servers.length ? `${servers.length} server(s)` : "not configured",
+    Boolean(settings.mcp?.enabled && servers.length),
+    settings.mcp?.enabled
+      ? servers.length
+        ? `${servers.length} enabled MCP server(s).`
+        : "MCP is enabled, but no server is configured."
+      : "Disabled. Add servers in Settings to expose remote/local MCP tools.",
   );
 }
 
@@ -138,8 +170,10 @@ async function checkProviders(settings) {
   );
 
   const docker = checkDockerStatus(settings.sandbox.mode);
+  const runpod = Promise.resolve(runpodStatus(settings));
+  const mcp = Promise.resolve(mcpStatus(settings));
 
-  return Promise.all([ollama, comfy, workflows, searxng, serpApi, ollamaSearch, docker]);
+  return Promise.all([ollama, comfy, workflows, searxng, serpApi, ollamaSearch, runpod, mcp, docker]);
 }
 
 module.exports = {

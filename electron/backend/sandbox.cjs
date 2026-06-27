@@ -58,8 +58,16 @@ function subprocessCommand(settings, command) {
     };
   }
 
+  if (settings.sandbox.shell === "bash" || settings.sandbox.shell === "zsh" || settings.sandbox.shell === "sh") {
+    return {
+      command: settings.sandbox.shell,
+      args: ["-lc", command],
+    };
+  }
+
+  const powershell = process.platform === "win32" ? "powershell.exe" : "pwsh";
   return {
-    command: "powershell.exe",
+    command: powershell,
     args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
   };
 }

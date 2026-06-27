@@ -1,12 +1,14 @@
-<<<<<<< HEAD
 ![Local Agent Studio](assets/github-hero-dark.png)
 
 # Local Agent Studio
 
-**Local-first Agent Mode for Windows.**  
+**Local-first Agent Mode for Windows, Linux, and macOS.**
+
 A ChatGPT/Claude-style desktop app that connects your local and API-powered tools: **Ollama**, **ComfyUI**, web search providers, workspace files, local databases, and sandbox commands.
 
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D6?logo=windows&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-x64%20tar.gz-fcc624?logo=linux&logoColor=111)
+![macOS](https://img.shields.io/badge/macOS-dmg%20%7C%20zip-000?logo=apple&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-111?logo=ollama&logoColor=white)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-images%20%26%20video-0f766e)
 ![Electron](https://img.shields.io/badge/Electron-desktop-47848f?logo=electron&logoColor=white)
@@ -17,25 +19,43 @@ Local Agent Studio is built for people who want a normal chatbot interface, but 
 ## Highlights
 
 - **Chatbot UI** inspired by ChatGPT, Claude, and Open WebUI.
+- **Editable user messages** with real context rewind to that point in the conversation.
 - **Ollama chat** with streaming responses.
 - **Reasoning panel** for models that return thinking traces.
+- **Reasoning flags** with `--think`, `--think high`, and `--no-think`.
+- **Reasoning picker near the model selector** for quick ChatGPT-style control.
 - **Multimodal attachments** for images, audio, video, text, and files.
+- **Drag-and-drop and clipboard paste** for images/files.
 - **Native image input** for Ollama vision-capable models.
+- **Local PC date/time context** so the LLM knows today's date without guessing or searching.
 - **Web search** through SearXNG, SerpAPI, or Ollama Web Search.
 - **Search summarization** instead of raw result dumps.
 - **Up to 3 web searches** per user request.
 - **ComfyUI image generation** with bundled workflows.
 - **Image model picker** for Z-Image-Turbo, Flux.2 klein 9b, and Ideogram v4.
+- **Custom ComfyUI image models** through user-defined workflow JSON files.
 - **Ideogram v4 effort selection**: turbo, default, quality.
 - **Workspace file tools**: create, read, edit, delete, and preview text files.
+- **File preview and download** from the workspace panel.
 - **Local database creation** from JSON/CSV-like objects: JSON DB, CSV export, and SQLite.
 - **Sandbox commands** through subprocess or Docker mode.
+- **MCP server support** for external tools.
+- **Runpod provider settings** for remote Ollama-compatible and ComfyUI workloads.
+- **Tool permission controls** for files, search, images, terminal, database, and MCP.
+- **First-launch workspace setup**.
+- **Chat export/import** as JSON.
+- **Manual update checks** through a lightweight remote `version.json` file.
+- **Agent task queue** for sending the next prompt while the current answer is running.
 - **Themes**: system, light, dark.
 - **Languages**: English, Russian, Ukrainian, German, Polish.
 
 ## Screenshots
 
 ![Light social preview](assets/github-social-light.png)
+
+![v0.2.0 GitHub update preview](assets/update-0.2.0-github-preview.png)
+
+![v0.2.0 Reddit update preview](assets/update-0.2.0-reddit-preview.png)
 
 ![Rendered app screen](assets/rendered-screen.png)
 
@@ -79,10 +99,27 @@ Run a sandbox command:
 
 ## Download
 
-The Windows installer is generated at:
+Release builds are generated under `release/`.
+
+Windows installer:
 
 ```text
-release/Local Agent Studio-0.1.5-x64.exe
+release/Local Agent Studio-0.2.0-x64.exe
+```
+
+Linux packages:
+
+```text
+release/Local Agent Studio-0.2.0-x64.tar.gz
+```
+
+AppImage and `.deb` builds should be produced on Linux or CI with Linux packaging tools.
+
+macOS packages must be produced on macOS or macOS CI:
+
+```text
+release/Local Agent Studio-0.2.0-x64.dmg
+release/Local Agent Studio-0.2.0-arm64.dmg
 ```
 
 If you are publishing this project on GitHub, attach the installer to a GitHub Release.
@@ -91,7 +128,7 @@ If you are publishing this project on GitHub, attach the installer to a GitHub R
 
 Requirements:
 
-- Windows 10 or newer
+- Windows 10+, Linux, or macOS
 - Node.js 20+
 - npm
 - Ollama for local LLMs
@@ -126,6 +163,24 @@ Build the Windows installer:
 
 ```powershell
 npm.cmd run package:win
+```
+
+Build Linux packages:
+
+```powershell
+npm.cmd run package:linux
+```
+
+Build Linux AppImage/deb installers on Linux or CI:
+
+```bash
+npm run package:linux:installers
+```
+
+Build macOS packages on macOS or macOS CI:
+
+```bash
+npm run package:mac
 ```
 
 ## Local Services
@@ -224,7 +279,7 @@ $env:LOCAL_AGENT_THEME="system"
 $env:LOCAL_AGENT_LANGUAGE="en"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
 $env:OLLAMA_MODEL="auto"
-$env:OLLAMA_THINKING="auto"
+$env:OLLAMA_THINKING="off"
 $env:COMFYUI_BASE_URL="http://localhost:8188"
 $env:SEARCH_PROVIDER="searxng"
 ```
@@ -388,6 +443,3 @@ Issues and pull requests are welcome. Useful contributions:
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
-=======
-# Local-Agent-Studio
->>>>>>> origin/main

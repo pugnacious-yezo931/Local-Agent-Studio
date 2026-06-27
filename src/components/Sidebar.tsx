@@ -1,4 +1,4 @@
-import { Bot, Clock3, FolderOpen, MessageSquare, Plus, Settings as SettingsIcon, Terminal, UserRound } from "lucide-react";
+import { Bot, Clock3, FolderOpen, MessageSquare, Plus, RefreshCw, Settings as SettingsIcon, Terminal, UserRound } from "lucide-react";
 import { t } from "../i18n";
 import type { LanguageCode, Settings } from "../types";
 
@@ -10,9 +10,10 @@ interface SidebarProps {
   onNavigate: (view: ActiveView) => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
+  onCheckUpdates: () => void;
 }
 
-export function Sidebar({ activeView, settings, onNavigate, onNewChat, onOpenSettings }: SidebarProps) {
+export function Sidebar({ activeView, settings, onNavigate, onNewChat, onOpenSettings, onCheckUpdates }: SidebarProps) {
   const language = (settings?.appearance.language || "en") as LanguageCode;
   const userName = "Anatoly";
 
@@ -24,7 +25,7 @@ export function Sidebar({ activeView, settings, onNavigate, onNewChat, onOpenSet
         </div>
         <div className="brand-copy">
           <strong>Local Agent Studio</strong>
-          <span>v0.1.5</span>
+          <span>v0.2.0</span>
         </div>
         <button className="icon-button new-chat-button" type="button" onClick={onNewChat} aria-label={t(language, "newChat")}>
           <Plus size={19} />
@@ -54,12 +55,17 @@ export function Sidebar({ activeView, settings, onNavigate, onNewChat, onOpenSet
         </button>
       </nav>
 
-      <button className="profile-row" type="button" onClick={onOpenSettings}>
-        <span className="profile-avatar">
-          <UserRound size={17} />
-        </span>
-        <span>{userName}</span>
-      </button>
+      <div className="profile-block">
+        <button className="profile-row" type="button" onClick={onOpenSettings}>
+          <span className="profile-avatar">
+            <UserRound size={17} />
+          </span>
+          <span>{userName}</span>
+        </button>
+        <button className="icon-button" type="button" onClick={onCheckUpdates} aria-label="Check for update" title="Check for update">
+          <RefreshCw size={16} />
+        </button>
+      </div>
     </aside>
   );
 }
