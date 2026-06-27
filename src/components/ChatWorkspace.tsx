@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Copy,
   Database,
+  Download,
   FileText,
   FolderOpen,
   Globe2,
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import { languageLabels, t } from "../i18n";
 import { MarkdownMessage } from "./MarkdownMessage";
-import type { Attachment, ChatMessage, IdeogramEffort, ImageModel, Settings, ToolMode, ToolResult } from "../types";
+import type { Attachment, ChatMessage, ComfyImage, IdeogramEffort, ImageModel, Settings, ToolMode, ToolResult } from "../types";
 
 interface ChatWorkspaceProps {
   messages: ChatMessage[];
@@ -76,7 +77,7 @@ function getPayloadJobs(tool: ToolResult) {
   return (tool.payload?.jobs || []) as Array<{
     promptId?: string;
     number?: number;
-    images?: Array<{ url?: string; path?: string; resolution?: string; isSafe?: boolean }>;
+    images?: Array<ComfyImage & { path?: string; resolution?: string; isSafe?: boolean }>;
   }>;
 }
 
@@ -103,6 +104,32 @@ function AttachmentChips({ attachments, onRemove }: { attachments: Attachment[];
 }
 
 function ToolResultDetails({ tool, language }: { tool: ToolResult; language: Settings["appearance"]["language"] }) {
+  const [loadedImages, setLoadedImages] = useState<Record<string, ComfyImage[]>>({});
+  const [savedImages, setSavedImages] = useState<Record<string, string>>({});
+  const [imageStatus, setImageStatus] = useState<Record<string, string>>({});
+
+  async function loadComfyImages(promptId: string) {
+    setImageStatus((current) => ({ ...current, [promptId]: "Loading..." }));
+    try {
+      const result = await window.localAgent.getComfyImages({ promptId });
+      setLoadedImages((current) => ({ ...current, [promptId]: result.images || [] }));
+      setImageStatus((current) => ({ ...current, [promptId]: result.images?.length ? "" : "No finished images yet" }));
+    } catch (error) {
+      setImageStatus((current) => ({ ...current, [promptId]: error instanceof Error ? error.message : String(error) }));
+    }
+  }
+
+  async function saveComfyImage(image: ComfyImage) {
+    const key = `${image.type || "output"}/${image.subfolder || ""}/${image.filename}`;
+    setSavedImages((current) => ({ ...current, [key]: "Saving..." }));
+    try {
+      const result = await window.localAgent.saveComfyImage({ image });
+      setSavedImages((current) => ({ ...current, [key]: result.relativePath }));
+    } catch (error) {
+      setSavedImages((current) => ({ ...current, [key]: error instanceof Error ? error.message : String(error) }));
+    }
+  }
+
   if (tool.type === "search" && tool.results?.length) {
     return (
       <details className="tool-details">
@@ -129,19 +156,41 @@ function ToolResultDetails({ tool, language }: { tool: ToolResult; language: Set
         <summary>{tool.label}</summary>
         <div className="image-job-list">
           {jobs.map((job, index) => {
-            const images = job.images || [];
+            const images = [...(job.images || []), ...(job.promptId ? loadedImages[job.promptId] || [] : [])];
             return (
               <div className="image-job" key={`${job.promptId || "image"}-${index}`}>
                 {job.promptId ? <code>{job.promptId}</code> : <strong>Image job {index + 1}</strong>}
                 {typeof job.number === "number" ? <span>Queue #{job.number}</span> : null}
+                {job.promptId ? (
+                  <div className="image-actions">
+                    <button className="tiny-button" type="button" onClick={() => loadComfyImages(job.promptId!)}>
+                      <Image size={13} />
+                      Load images
+                    </button>
+                    {imageStatus[job.promptId] ? <span>{imageStatus[job.promptId]}</span> : null}
+                  </div>
+                ) : null}
                 {images.length ? (
                   <div className="generated-grid">
-                    {images.map((item, imageIndex) => (
-                      <a key={`${item.url || item.path}-${imageIndex}`} href={item.url || imageSrc(item.path)} target="_blank" rel="noreferrer">
-                        <img src={imageSrc(item.path || item.url)} alt={`Generated ${imageIndex + 1}`} />
-                        <span>{item.resolution || "generated"}</span>
-                      </a>
-                    ))}
+                    {images.map((item, imageIndex) => {
+                      const imageItem = item as ComfyImage & { path?: string; resolution?: string };
+                      const key = `${item.type || "output"}/${item.subfolder || ""}/${item.filename || item.url || imageIndex}`;
+                      return (
+                        <div className="generated-image-card" key={key}>
+                          <a href={imageItem.url || imageSrc(imageItem.path)} target="_blank" rel="noreferrer">
+                            <img src={imageSrc(imageItem.path || imageItem.url)} alt={`Generated ${imageIndex + 1}`} />
+                            <span>{imageItem.filename || imageItem.resolution || "generated"}</span>
+                          </a>
+                          {imageItem.filename ? (
+                            <button className="tiny-button" type="button" onClick={() => saveComfyImage(imageItem)}>
+                              <Download size={13} />
+                              Download
+                            </button>
+                          ) : null}
+                          {savedImages[key] ? <small>{savedImages[key]}</small> : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>

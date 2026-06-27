@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld("localAgent", {
   searchWeb: (payload) => ipcRenderer.invoke("search:web", payload),
   queueComfy: (payload) => ipcRenderer.invoke("comfy:queue", payload),
   getComfyHistory: (payload) => ipcRenderer.invoke("comfy:history", payload),
+  getComfyImages: (payload) => ipcRenderer.invoke("comfy:images", payload),
+  saveComfyImage: (payload) => ipcRenderer.invoke("comfy:save-image", payload),
   runCommand: (payload) => ipcRenderer.invoke("terminal:run", payload),
   listFiles: (payload) => ipcRenderer.invoke("files:list", payload),
   readFile: (payload) => ipcRenderer.invoke("files:read", payload),

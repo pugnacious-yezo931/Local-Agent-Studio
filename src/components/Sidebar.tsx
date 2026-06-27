@@ -24,7 +24,7 @@ export function Sidebar({ activeView, settings, onNavigate, onNewChat, onOpenSet
         </div>
         <div className="brand-copy">
           <strong>Local Agent Studio</strong>
-          <span>v0.1.0</span>
+          <span>v0.1.5</span>
         </div>
         <button className="icon-button new-chat-button" type="button" onClick={onNewChat} aria-label={t(language, "newChat")}>
           <Plus size={19} />

@@ -414,7 +414,7 @@ function normalizeToolDecision(decision, settings) {
   };
 }
 
-async function decideToolWithOllama({ messages, settings, headers, model }) {
+async function decideToolWithOllama({ messages, settings, headers, model, observations = [] }) {
   const last = lastUser(messages);
   const attachmentSummary = attachmentContext(last.attachments || []);
   const recentMessages = compactMessages(messages, false)
@@ -428,7 +428,8 @@ async function decideToolWithOllama({ messages, settings, headers, model }) {
       {
         role: "system",
         content: `You are the tool router for Local Agent Studio, a local-first desktop agent.
-Choose exactly one action for the app to execute, or "answer" if no tool is needed.
+Choose exactly one next action for the app to execute, or "answer" when no tool is needed.
+You may be called several times for the same user request. Use the observations to decide whether another tool step is useful.
 
 Return only valid JSON with this schema:
 {
@@ -450,9 +451,12 @@ Rules:
 - If the user asks to create a file "on any topic" or without exact content, you must invent useful content and include the complete file text in "content".
 - Never choose write_file with empty content unless the user explicitly asks for an empty file.
 - File paths must be relative to the workspace. If the user gives no file name, choose a sensible one, e.g. "note.txt", "README.md", "todo.md", "data.json".
+- Infer file extensions from the requested artifact. Python code must be ".py", JavaScript ".js", TypeScript ".ts", Markdown ".md", JSON ".json", CSV ".csv", HTML ".html", CSS ".css", PowerShell ".ps1".
 - Use create_database for requests to build/import/convert objects into a local database.
 - Use generate_image only for a new visual asset. If the user attaches an image and asks what is on it, choose answer.
 - Use run_command only when the user asks to execute a shell/CLI command or a task that clearly requires CLI execution.
+- After a tool succeeds, choose another tool only if it helps finish the user's request. Do not repeat the same failed action.
+- Choose answer when the requested work is complete or when the next step is normal conversation.
 - If the request is just conversation or analysis, choose answer.
 - Default imageModel is "${settings.image?.model || "z-image-turbo"}".
 - Default ideogramEffort is "${settings.image?.ideogramEffort || "default"}".
@@ -467,7 +471,10 @@ Latest user message:
 ${last.content || ""}
 
 Attachments:
-${attachmentSummary || "none"}`,
+${attachmentSummary || "none"}
+
+Tool observations so far:
+${observations.length ? observations.join("\n\n") : "none"}`,
       },
     ],
     stream: false,
@@ -758,6 +765,125 @@ async function executeToolDecision({ decision, settings, onEvent }) {
   }
 
   return null;
+}
+
+function summarizeToolResponse(response, step) {
+  if (!response) {
+    return "";
+  }
+  const labels = (response.toolResults || [])
+    .map((tool) => `${tool.label || tool.type || "tool"}:${tool.status || "done"}`)
+    .join(", ");
+  const body = String(response.content || "").trim().slice(0, 4000);
+  return [`Step ${step}${labels ? ` (${labels})` : ""}:`, body].filter(Boolean).join("\n");
+}
+
+async function finalizeToolLoopAnswer({ messages, settings, headers, model, observations, toolResults, stream, onEvent }) {
+  const payload = {
+    model,
+    messages: [
+      {
+        role: "system",
+        content: `${buildSystemPrompt("", settings)}
+
+You just used local tools for the user. Write a concise final answer.
+Do not claim a file, command, database, or image was created unless it appears in the tool observations.
+Mention saved workspace paths when relevant. For queued ComfyUI images, say they are queued and can be loaded/saved from the result card.`,
+      },
+      ...compactMessages(messages),
+      {
+        role: "user",
+        content: `Tool observations:
+${observations.join("\n\n")}`,
+      },
+    ],
+    stream,
+    options: {
+      temperature: Number(settings.ollama.temperature ?? 0.35),
+      num_ctx: Number(settings.ollama.contextTokens ?? 8192),
+    },
+  };
+  const think = thinkValue(settings);
+  if (think !== undefined) {
+    payload.think = think;
+  }
+
+  if (stream) {
+    onEvent?.({ type: "status", message: `Streaming final answer from ${model}` });
+    const { content, thinking, finalData } = await streamChat({ payload, settings, headers, onEvent });
+    return {
+      content,
+      thinking,
+      model: finalData.model || model,
+      metrics: {
+        totalDurationNs: finalData.total_duration,
+        promptTokens: finalData.prompt_eval_count,
+        completionTokens: finalData.eval_count,
+      },
+      toolResults,
+    };
+  }
+
+  const data = await fetchJson(endpoint(settings.ollama.baseUrl, "/api/chat"), {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+    timeoutMs: Number(settings.ollama.timeoutMs || 120000),
+  });
+
+  return {
+    content: data?.message?.content || observations[observations.length - 1] || "",
+    thinking: data?.message?.thinking || "",
+    model: data.model || model,
+    metrics: {
+      totalDurationNs: data.total_duration,
+      promptTokens: data.prompt_eval_count,
+      completionTokens: data.eval_count,
+    },
+    toolResults,
+  };
+}
+
+async function runToolLoop({ messages, settings, headers, model, toolMode, stream, onEvent }) {
+  if (toolMode === "none") {
+    return null;
+  }
+
+  const maxSteps = clamp(settings.agent?.maxToolSteps || 5, 1, 8);
+  const observations = [];
+  const toolResults = [];
+
+  for (let step = 1; step <= maxSteps; step += 1) {
+    onEvent?.({ type: "status", message: `Asking Ollama for tool step ${step}` });
+    const decision = await decideToolWithOllama({ messages, settings, headers, model, observations });
+    if (!decision || decision.action === "answer") {
+      if (!observations.length) {
+        return null;
+      }
+      return finalizeToolLoopAnswer({ messages, settings, headers, model, observations, toolResults, stream, onEvent });
+    }
+
+    const response = await executeToolDecision({ decision, settings, onEvent });
+    if (!response) {
+      if (!observations.length) {
+        return null;
+      }
+      return finalizeToolLoopAnswer({ messages, settings, headers, model, observations, toolResults, stream, onEvent });
+    }
+
+    toolResults.push(...(response.toolResults || []));
+    observations.push(summarizeToolResponse(response, step));
+
+    const failed = (response.toolResults || []).some((tool) => tool.status === "error");
+    if (failed) {
+      return {
+        ...response,
+        toolResults,
+      };
+    }
+  }
+
+  return finalizeToolLoopAnswer({ messages, settings, headers, model, observations, toolResults, stream, onEvent });
 }
 
 function parseImageIntent(text, settings) {
@@ -1256,13 +1382,15 @@ async function runAgentMessage({ messages, settings, toolMode, stream, onEvent }
 
   if (toolMode !== "none") {
     try {
-      onEvent?.({ type: "status", message: "Asking Ollama which tool to use" });
-      const decision = await decideToolWithOllama({ messages, settings, headers, model });
-      const routed = await executeToolDecision({ decision, settings, onEvent });
+      const routed = await runToolLoop({ messages, settings, headers, model, toolMode, stream, onEvent });
       if (routed) {
         return routed;
       }
-    } catch {
+    } catch (error) {
+      onEvent?.({
+        type: "status",
+        message: `Tool router fallback: ${error instanceof Error ? error.message : String(error)}`,
+      });
       const fallbackDirect = await maybeHandleDirectTool({ messages, settings, toolMode, onEvent });
       if (fallbackDirect) {
         return fallbackDirect;

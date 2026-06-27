@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { endpoint, fetchJson } = require("./fetch.cjs");
+const { resolveWorkspacePath } = require("./files.cjs");
 
 const IMAGE_PRESETS = {
   "z-image-turbo": {
@@ -356,7 +357,111 @@ async function getComfyHistory({ promptId, settings }) {
   return fetchJson(endpoint(settings.comfy.baseUrl, pathSuffix), { timeoutMs: 10000 });
 }
 
+function imageViewUrl(settings, image) {
+  const params = new URLSearchParams({
+    filename: image.filename || "",
+    subfolder: image.subfolder || "",
+    type: image.type || "output",
+  });
+  return endpoint(settings.comfy.baseUrl, `/view?${params.toString()}`);
+}
+
+function collectImagesFromHistory(history, settings) {
+  const images = [];
+  const entries = [];
+
+  if (history?.outputs) {
+    entries.push(history);
+  } else if (history && typeof history === "object") {
+    entries.push(...Object.values(history).filter((item) => item?.outputs));
+  }
+
+  for (const entry of entries) {
+    for (const [nodeId, output] of Object.entries(entry.outputs || {})) {
+      for (const image of output?.images || []) {
+        const normalized = {
+          nodeId,
+          filename: image.filename || "",
+          subfolder: image.subfolder || "",
+          type: image.type || "output",
+        };
+        images.push({
+          ...normalized,
+          url: imageViewUrl(settings, normalized),
+        });
+      }
+    }
+  }
+
+  return images;
+}
+
+async function getComfyImages({ promptId, settings }) {
+  if (!promptId) {
+    return { promptId, images: [] };
+  }
+  const history = await getComfyHistory({ promptId, settings });
+  return {
+    promptId,
+    images: collectImagesFromHistory(history, settings),
+  };
+}
+
+function uniqueImagePath(settings, filename) {
+  const cleanName = path.basename(filename || `comfy-${Date.now()}.png`).replace(/[<>:"/\\|?*]+/g, "-");
+  const { root, absolutePath: imageDir } = resolveWorkspacePath(settings, "Images");
+  fs.mkdirSync(imageDir, { recursive: true });
+
+  const parsed = path.parse(cleanName);
+  const ext = parsed.ext || ".png";
+  const base = parsed.name || "comfy-image";
+  let candidate = path.join(imageDir, `${base}${ext}`);
+  let index = 1;
+
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(imageDir, `${base}-${index}${ext}`);
+    index += 1;
+  }
+
+  return {
+    root,
+    absolutePath: candidate,
+    relativePath: path.relative(root, candidate),
+  };
+}
+
+async function saveComfyImageToWorkspace({ settings, image }) {
+  if (!image?.filename) {
+    throw new Error("Image filename is missing");
+  }
+
+  const url = imageViewUrl(settings, image);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`${response.status} ${response.statusText}: ${text || "ComfyUI image download failed"}`);
+    }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const target = uniqueImagePath(settings, image.filename);
+    fs.writeFileSync(target.absolutePath, bytes);
+    return {
+      ...target,
+      size: bytes.length,
+      source: image,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 module.exports = {
+  getComfyImages,
   getComfyHistory,
   queueComfyPrompt,
+  saveComfyImageToWorkspace,
 };

@@ -4,7 +4,7 @@ const { readSettings, saveSettings } = require("./backend/config.cjs");
 const { checkProviders } = require("./backend/providers.cjs");
 const { sendAgentMessage, sendAgentMessageStream } = require("./backend/llm.cjs");
 const { searchWeb } = require("./backend/search.cjs");
-const { queueComfyPrompt, getComfyHistory } = require("./backend/comfy.cjs");
+const { queueComfyPrompt, getComfyHistory, getComfyImages, saveComfyImageToWorkspace } = require("./backend/comfy.cjs");
 const { runCommand } = require("./backend/sandbox.cjs");
 const { describeAttachments } = require("./backend/attachments.cjs");
 const {
@@ -102,6 +102,20 @@ function registerHandlers() {
   ipcMain.handle("comfy:history", async (_event, payload) =>
     getComfyHistory({
       promptId: payload.promptId,
+      settings: getSettings(),
+    }),
+  );
+
+  ipcMain.handle("comfy:images", async (_event, payload) =>
+    getComfyImages({
+      promptId: payload.promptId,
+      settings: getSettings(),
+    }),
+  );
+
+  ipcMain.handle("comfy:save-image", async (_event, payload) =>
+    saveComfyImageToWorkspace({
+      image: payload.image,
       settings: getSettings(),
     }),
   );

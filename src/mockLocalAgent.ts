@@ -177,6 +177,14 @@ export function installMockLocalAgent() {
       jobs: [{ clientId: "preview-client", promptId: "preview-prompt", number: 1 }],
     }),
     getComfyHistory: async () => ({}),
+    getComfyImages: async () => ({ promptId: "preview-prompt", images: [] }),
+    saveComfyImage: async (payload) => ({
+      root: mockSettings.workspacePath,
+      relativePath: `Images\\${payload.image.filename}`,
+      absolutePath: `${mockSettings.workspacePath}\\Images\\${payload.image.filename}`,
+      size: 0,
+      source: payload.image,
+    }),
     runCommand: async (): Promise<TerminalResult> => ({
       exitCode: 0,
       stdout: "Preview command output",

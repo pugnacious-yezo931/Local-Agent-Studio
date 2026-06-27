@@ -201,3 +201,19 @@ export interface ComfyQueueResponse {
     }>;
   }>;
 }
+
+export interface ComfyImage {
+  nodeId?: string;
+  filename: string;
+  subfolder?: string;
+  type?: string;
+  url?: string;
+}
+
+export interface ComfyImageSaveResult {
+  root: string;
+  relativePath: string;
+  absolutePath: string;
+  size: number;
+  source: ComfyImage;
+}

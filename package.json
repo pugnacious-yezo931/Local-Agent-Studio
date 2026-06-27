@@ -1,6 +1,6 @@
 {
   "name": "local-agent-studio",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "Local Agent Mode desktop app powered by Ollama, ComfyUI, web search APIs, and a local sandbox.",
   "private": true,
   "type": "module",
@@ -46,7 +46,8 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "language": "1033"
     }
   }
 }

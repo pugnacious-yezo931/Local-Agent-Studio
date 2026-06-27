@@ -681,10 +681,22 @@ h3 {
   font-size: 12px;
 }
 
+.image-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .generated-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
+}
+
+.generated-image-card {
+  display: grid;
+  gap: 7px;
 }
 
 .generated-grid a {

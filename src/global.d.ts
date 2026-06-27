@@ -2,6 +2,8 @@ import type {
   AgentResponse,
   AgentStreamEvent,
   Attachment,
+  ComfyImage,
+  ComfyImageSaveResult,
   ComfyQueueResponse,
   IdeogramEffort,
   ImageModel,
@@ -50,6 +52,8 @@ declare global {
         count?: number;
       }) => Promise<ComfyQueueResponse>;
       getComfyHistory: (payload: { promptId?: string }) => Promise<unknown>;
+      getComfyImages: (payload: { promptId: string }) => Promise<{ promptId: string; images: ComfyImage[] }>;
+      saveComfyImage: (payload: { image: ComfyImage }) => Promise<ComfyImageSaveResult>;
       runCommand: (payload: { command: string }) => Promise<TerminalResult>;
       listFiles: (payload?: { directory?: string; depth?: number }) => Promise<WorkspaceListResult>;
       readFile: (payload: { filePath: string }) => Promise<WorkspaceReadResult>;

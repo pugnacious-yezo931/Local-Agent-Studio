@@ -82,7 +82,7 @@ Run a sandbox command:
 The Windows installer is generated at:
 
 ```text
-release/Local Agent Studio-0.1.0-x64.exe
+release/Local Agent Studio-0.1.5-x64.exe
 ```
 
 If you are publishing this project on GitHub, attach the installer to a GitHub Release.
