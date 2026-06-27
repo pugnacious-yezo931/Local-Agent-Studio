@@ -1,0 +1,420 @@
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bot,
+  Brain,
+  ChevronDown,
+  Copy,
+  Database,
+  FileText,
+  FolderOpen,
+  Globe2,
+  Image,
+  Paperclip,
+  Search,
+  Send,
+  Settings as SettingsIcon,
+  Terminal,
+  User,
+  X,
+} from "lucide-react";
+import { languageLabels, t } from "../i18n";
+import { MarkdownMessage } from "./MarkdownMessage";
+import type { Attachment, ChatMessage, IdeogramEffort, ImageModel, Settings, ToolMode, ToolResult } from "../types";
+
+interface ChatWorkspaceProps {
+  messages: ChatMessage[];
+  busy: boolean;
+  toolMode: ToolMode;
+  settings: Settings | null;
+  onToolModeChange: (mode: ToolMode) => void;
+  onImageSettingsChange: (patch: Partial<Settings["image"]>) => void;
+  onOllamaModelChange: (model: string) => void;
+  onSend: (message: string, attachments: Attachment[]) => void;
+  onChooseWorkspace: () => void;
+  onOpenSettings: () => void;
+}
+
+const imageModelLabels: Record<ImageModel, string> = {
+  "z-image-turbo": "Z-Image-Turbo",
+  "flux2-klein-9b": "Flux.2 klein 9b",
+  "ideogram-v4": "Ideogram v4",
+};
+
+const ollamaModelPresets = ["auto", "gemma4:e2b", "gemma4:e4b"];
+
+function MessageIcon({ role }: { role: ChatMessage["role"] }) {
+  return <span className={`message-icon ${role}`}>{role === "assistant" ? <Bot size={17} /> : <User size={17} />}</span>;
+}
+
+function iconForTool(tool: ToolResult) {
+  if (tool.type === "search") {
+    return <Search size={13} />;
+  }
+  if (tool.type === "comfy") {
+    return <Image size={13} />;
+  }
+  if (tool.type === "terminal") {
+    return <Terminal size={13} />;
+  }
+  if (tool.type === "database") {
+    return <Database size={13} />;
+  }
+  return <FileText size={13} />;
+}
+
+function imageSrc(pathOrUrl?: string) {
+  if (!pathOrUrl) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl;
+  }
+  return `file:///${pathOrUrl.replace(/\\/g, "/")}`;
+}
+
+function getPayloadJobs(tool: ToolResult) {
+  return (tool.payload?.jobs || []) as Array<{
+    promptId?: string;
+    number?: number;
+    images?: Array<{ url?: string; path?: string; resolution?: string; isSafe?: boolean }>;
+  }>;
+}
+
+function AttachmentChips({ attachments, onRemove }: { attachments: Attachment[]; onRemove?: (id: string) => void }) {
+  if (!attachments.length) {
+    return null;
+  }
+
+  return (
+    <div className="attachment-row">
+      {attachments.map((attachment) => (
+        <span className="attachment-chip" key={attachment.id} title={attachment.path}>
+          {attachment.kind === "image" ? <Image size={13} /> : attachment.kind === "audio" || attachment.kind === "video" ? <Paperclip size={13} /> : <FileText size={13} />}
+          {attachment.name}
+          {onRemove ? (
+            <button type="button" onClick={() => onRemove(attachment.id)} aria-label={`Remove ${attachment.name}`}>
+              <X size={12} />
+            </button>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ToolResultDetails({ tool, language }: { tool: ToolResult; language: Settings["appearance"]["language"] }) {
+  if (tool.type === "search" && tool.results?.length) {
+    return (
+      <details className="tool-details">
+        <summary>
+          {t(language, "sources")} {tool.query ? `- "${tool.query}"` : ""} · {tool.results.length}
+        </summary>
+        <div className="source-list">
+          {tool.results.slice(0, 8).map((result, index) => (
+            <a key={`${result.url}-${index}`} href={result.url} target="_blank" rel="noreferrer">
+              <span>{index + 1}</span>
+              <strong>{result.title}</strong>
+              <small>{result.source}</small>
+            </a>
+          ))}
+        </div>
+      </details>
+    );
+  }
+
+  if (tool.type === "comfy") {
+    const jobs = getPayloadJobs(tool);
+    return (
+      <details className="tool-details" open>
+        <summary>{tool.label}</summary>
+        <div className="image-job-list">
+          {jobs.map((job, index) => {
+            const images = job.images || [];
+            return (
+              <div className="image-job" key={`${job.promptId || "image"}-${index}`}>
+                {job.promptId ? <code>{job.promptId}</code> : <strong>Image job {index + 1}</strong>}
+                {typeof job.number === "number" ? <span>Queue #{job.number}</span> : null}
+                {images.length ? (
+                  <div className="generated-grid">
+                    {images.map((item, imageIndex) => (
+                      <a key={`${item.url || item.path}-${imageIndex}`} href={item.url || imageSrc(item.path)} target="_blank" rel="noreferrer">
+                        <img src={imageSrc(item.path || item.url)} alt={`Generated ${imageIndex + 1}`} />
+                        <span>{item.resolution || "generated"}</span>
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </details>
+    );
+  }
+
+  if (tool.type === "file" || tool.type === "database") {
+    const payload = tool.payload || {};
+    const paths = [
+      payload.relativePath,
+      payload.jsonRelativePath,
+      payload.csvRelativePath,
+      payload.sqliteRelativePath,
+    ].filter(Boolean);
+    return (
+      <details className="tool-details" open>
+        <summary>{tool.label}</summary>
+        <div className="file-result-list">
+          {paths.length ? paths.map((item: string) => <code key={item}>{item}</code>) : <span>{tool.status}</span>}
+          {payload.absolutePath || payload.jsonPath ? (
+            <button className="tiny-button" type="button" onClick={() => window.localAgent.showPath(payload.absolutePath || payload.jsonPath)}>
+              <FolderOpen size={13} />
+              Show
+            </button>
+          ) : null}
+        </div>
+      </details>
+    );
+  }
+
+  return null;
+}
+
+function ToolResultStrip({ message, language }: { message: ChatMessage; language: Settings["appearance"]["language"] }) {
+  const toolResults = message.toolResults || [];
+  if (!toolResults.length) {
+    return null;
+  }
+
+  return (
+    <div className="tool-result-strip">
+      <div className="tool-pill-row">
+        {toolResults.map((tool, index) => (
+          <span key={`${tool.label}-${tool.query || index}`} className={`tool-pill ${tool.status || "done"}`}>
+            {iconForTool(tool)}
+            {tool.label}
+          </span>
+        ))}
+      </div>
+      {toolResults.map((tool, index) => (
+        <ToolResultDetails key={`${tool.label}-details-${index}`} tool={tool} language={language} />
+      ))}
+    </div>
+  );
+}
+
+function ReasoningPanel({ thinking, language }: { thinking?: string; language: Settings["appearance"]["language"] }) {
+  if (!thinking?.trim()) {
+    return null;
+  }
+
+  return (
+    <details className="reasoning-panel">
+      <summary>
+        <Brain size={14} />
+        {t(language, "reasoning")}
+      </summary>
+      <pre>{thinking}</pre>
+    </details>
+  );
+}
+
+export function ChatWorkspace({
+  messages,
+  busy,
+  toolMode,
+  settings,
+  onToolModeChange,
+  onImageSettingsChange,
+  onOllamaModelChange,
+  onSend,
+  onChooseWorkspace,
+  onOpenSettings,
+}: ChatWorkspaceProps) {
+  const [composer, setComposer] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const language = settings?.appearance.language || "en";
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ block: "end" });
+    });
+  }, [messages, busy]);
+
+  const placeholder = useMemo(() => {
+    if (toolMode === "web") {
+      return `${t(language, "askAnything")} (${t(language, "web")})`;
+    }
+    if (toolMode === "none") {
+      return t(language, "askAnything");
+    }
+    return t(language, "askAnything");
+  }, [language, toolMode]);
+
+  const ollamaOptions = useMemo(() => {
+    const current = settings?.ollama.model || "auto";
+    return ollamaModelPresets.includes(current) ? ollamaModelPresets : [...ollamaModelPresets, current];
+  }, [settings?.ollama.model]);
+
+  async function attachFiles() {
+    const selected = await window.localAgent.chooseAttachments();
+    if (selected.length) {
+      setAttachments((current) => [...current, ...selected]);
+    }
+  }
+
+  function submit(event?: FormEvent) {
+    event?.preventDefault();
+    if ((!composer.trim() && !attachments.length) || busy) {
+      return;
+    }
+    onSend(composer, attachments);
+    setComposer("");
+    setAttachments([]);
+  }
+
+  const imageSettings = settings?.image;
+  const workspaceLabel = settings?.workspacePath ? settings.workspacePath.split(/[\\/]/).pop() || settings.workspacePath : t(language, "noDirectory");
+
+  return (
+    <section className="chat-view">
+      <header className="chat-header">
+        <div className="chat-title-block">
+          <h1>{t(language, "localAgent")}</h1>
+          <div className="header-select-row">
+            <label className="select-shell">
+              <select value={settings?.ollama.model || "auto"} disabled={!settings} onChange={(event) => onOllamaModelChange(event.target.value)} aria-label="Ollama model">
+                {ollamaOptions.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} />
+            </label>
+            <label className="select-shell">
+              <Image size={14} />
+              <select
+                value={imageSettings?.model || "z-image-turbo"}
+                disabled={!settings}
+                onChange={(event) => onImageSettingsChange({ model: event.target.value as ImageModel })}
+                aria-label="Image model"
+              >
+                {(Object.keys(imageModelLabels) as ImageModel[]).map((model) => (
+                  <option key={model} value={model}>
+                    {imageModelLabels[model]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} />
+            </label>
+            {(imageSettings?.model || "z-image-turbo") === "ideogram-v4" ? (
+              <label className="select-shell compact">
+                <select
+                  value={imageSettings?.ideogramEffort || "default"}
+                  disabled={!settings}
+                  onChange={(event) => onImageSettingsChange({ ideogramEffort: event.target.value as IdeogramEffort })}
+                  aria-label="Ideogram effort"
+                >
+                  <option value="turbo">turbo</option>
+                  <option value="default">default</option>
+                  <option value="quality">quality</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="chat-header-actions">
+          <div className="mode-switch" aria-label="Tool mode">
+            {(["auto", "web", "none"] as ToolMode[]).map((mode) => (
+              <button key={mode} className={toolMode === mode ? "segmented active" : "segmented"} type="button" onClick={() => onToolModeChange(mode)}>
+                {mode}
+              </button>
+            ))}
+          </div>
+          <span className={`stream-status ${busy ? "busy" : ""}`}>{busy ? t(language, "streaming") : t(language, "ready")}</span>
+          <button className="icon-button" type="button" onClick={onOpenSettings} aria-label="Open settings">
+            <SettingsIcon size={18} />
+          </button>
+        </div>
+      </header>
+
+      <div className="message-list">
+        <div className="message-column">
+          {messages.map((message) => (
+            <article key={message.id} className={`message ${message.role}${message.pending ? " pending" : ""}`}>
+              <MessageIcon role={message.role} />
+              <div className="message-body">
+                {message.role === "assistant" ? (
+                  <div className="message-meta">
+                    <strong>{t(language, "localAgent")}</strong>
+                    <span>{message.createdAt}</span>
+                  </div>
+                ) : null}
+                <MarkdownMessage content={message.content} />
+                <AttachmentChips attachments={message.attachments || []} />
+                <ReasoningPanel thinking={message.thinking} language={language} />
+                <ToolResultStrip message={message} language={language} />
+                {message.role === "assistant" && message.content ? (
+                  <div className="message-actions">
+                    <button type="button" aria-label="Copy response" onClick={() => navigator.clipboard?.writeText(message.content)}>
+                      <Copy size={15} />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      <form className="composer" onSubmit={submit}>
+        <div className="composer-card">
+          <AttachmentChips attachments={attachments} onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))} />
+          <textarea
+            value={composer}
+            placeholder={placeholder}
+            rows={1}
+            onChange={(event) => setComposer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+          />
+          <div className="composer-actions">
+            <div className="composer-left-actions">
+              <button className="icon-button flat" type="button" onClick={attachFiles} title={t(language, "attach")} aria-label={t(language, "attach")}>
+                <Paperclip size={18} />
+              </button>
+              <button
+                className={`icon-button flat ${toolMode === "web" ? "active" : ""}`}
+                type="button"
+                onClick={() => onToolModeChange(toolMode === "web" ? "auto" : "web")}
+                title={t(language, "web")}
+                aria-label={t(language, "web")}
+              >
+                <Globe2 size={18} />
+              </button>
+            </div>
+
+            <div className="composer-right-actions">
+              <button className="workspace-button" type="button" onClick={onChooseWorkspace} title={settings?.workspacePath || ""}>
+                <FolderOpen size={16} />
+                <span>{workspaceLabel}</span>
+              </button>
+              <span className="language-mini">{languageLabels[language]}</span>
+              <button className="send-button" type="submit" disabled={busy || (!composer.trim() && !attachments.length)} aria-label="Send message">
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </section>
+  );
+}
